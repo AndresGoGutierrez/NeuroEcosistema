@@ -350,3 +350,95 @@ def hodges_lehmann_one_sample(
         estimate=statistics.median(walsh),
         interval=OrderInterval(walsh[k - 1], walsh[len(walsh) - k], k, level),
     )
+
+
+# ---------------------------------------------------------------- two samples (ADR-013)
+
+MAX_TWO_SAMPLE_TOTAL = 20  # n1 + n2 for exact two-sample enumerations (ADR-032)
+
+
+def _check_two_sample_size(n1: int, n2: int) -> None:
+    if n1 + n2 > MAX_TWO_SAMPLE_TOTAL:
+        raise ValueError(
+            f"exact two-sample methods are limited to n1 + n2 <= {MAX_TWO_SAMPLE_TOTAL}, "
+            f"got {n1} + {n2}"
+        )
+
+
+def _sized_subset_sum_counts(weights: Sequence[int], size: int) -> dict[int, int]:
+    """Number of subsets of exactly ``size`` weights with each possible sum."""
+    table: list[dict[int, int]] = [{0: 1}] + [{} for _ in range(size)]
+    for weight in weights:
+        for used in range(size, 0, -1):
+            for total, ways in table[used - 1].items():
+                table[used][total + weight] = table[used].get(total + weight, 0) + ways
+    return table[size]
+
+
+@dataclass(frozen=True)
+class RankSumTest:
+    u_statistic: Fraction  # #{a > b} + 1/2 #{a = b}
+    p_value: Fraction  # two-sided exact permutation p
+
+
+def rank_sum_permutation_test(a: Sequence[float], b: Sequence[float]) -> RankSumTest:
+    """Exact two-sample rank-sum (Mann-Whitney) test enumerating all C(n1 + n2, n1) partitions.
+
+    Mid-ranks as doubled integers handle ties and censored values. Two-sided
+    p = P(|W - E[W]| >= |w_obs - E[W]|) over equiprobable partitions (ADR-013, ADR-032).
+    """
+    first, second = _values(a), _values(b)
+    n1, n2 = len(first), len(second)
+    _check_two_sample_size(n1, n2)
+    total_n = n1 + n2
+    ranks = midranks_doubled(first + second)
+    total = sum(ranks)
+    observed = sum(ranks[:n1])
+    # |W - E[W]| with W = doubled rank sum, E[W] = n1 * total / N: compare N*W - n1*total.
+    distance = abs(total_n * observed - n1 * total)
+    counts = _sized_subset_sum_counts(ranks, n1)
+    extreme = sum(ways for s, ways in counts.items() if abs(total_n * s - n1 * total) >= distance)
+    u = Fraction(observed, 2) - Fraction(n1 * (n1 + 1), 2)
+    return RankSumTest(u_statistic=u, p_value=Fraction(extreme, comb(total_n, n1)))
+
+
+@cache
+def mann_whitney_null_cdf(n1: int, n2: int, u: int) -> Fraction:
+    """P(U <= u) for the Mann-Whitney statistic of untied samples of sizes n1 and n2."""
+    if u < 0:
+        return Fraction(0)
+    offset = n1 * (n1 + 1) // 2
+    counts = _sized_subset_sum_counts(range(1, n1 + n2 + 1), n1)
+    return Fraction(sum(w for s, w in counts.items() if s - offset <= u), comb(n1 + n2, n1))
+
+
+@dataclass(frozen=True)
+class HodgesLehmannShift:
+    estimate: float  # median of treatment - reference over all pairs
+    interval: OrderInterval  # [D_(k), D_(mn-k+1)] by inversion of the Mann-Whitney test
+
+
+def hodges_lehmann_two_sample(
+    reference: Sequence[float], treatment: Sequence[float], confidence: Fraction = CONFIDENCE
+) -> HodgesLehmannShift:
+    """Shift estimate delta = treatment - reference with its exact interval (ADR-013).
+
+    Assumes a location-shift model; k comes from the exact null distribution of U without ties.
+    """
+    ref, treat = _values(reference), _values(treatment)
+    _check_two_sample_size(len(ref), len(treat))
+    differences = sorted(t - r for r in ref for t in treat)
+    k, level = _largest_k(
+        len(differences), lambda j: mann_whitney_null_cdf(len(ref), len(treat), j), confidence
+    )
+    return HodgesLehmannShift(
+        estimate=statistics.median(differences),
+        interval=OrderInterval(differences[k - 1], differences[len(differences) - k], k, level),
+    )
+
+
+def cliffs_delta(a: Sequence[float], b: Sequence[float]) -> Fraction:
+    """delta(a, b) = (#{a > b} - #{a < b}) / (n_a n_b) = 2U / (n_a n_b) - 1, exactly."""
+    first, second = np.asarray(_values(a)), np.asarray(_values(b))
+    signs = np.sign(first[:, np.newaxis] - second[np.newaxis, :])
+    return Fraction(int(signs.sum()), first.size * second.size)
