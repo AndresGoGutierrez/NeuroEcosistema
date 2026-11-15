@@ -1,0 +1,50 @@
+{
+  "command": [
+    "C:\\Universidad Santoto\\Noveno Semestre\\ProyectosIA\\NEUROECOSISTEMA\\.venv\\Scripts\\neuroeco",
+    "pilot",
+    "p0"
+  ],
+  "config_hash": "a44a23f9c7441f956fb5ece31524ff19b8fdeb022de3e28d057d8de17c38edfd",
+  "cpu_count": 32,
+  "git_commit": "d1b6e57d333efdb7515e4c9771985c9752a0b8d3",
+  "git_dirty": false,
+  "machine": "AMD64",
+  "numpy": "2.5.4",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "processor": "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel",
+  "python": "3.12.14",
+  "reference": {
+    "n_predators": 8,
+    "n_prey": 50
+  },
+  "reference_c_step_us": 833.001,
+  "spec": {
+    "pilot": "P0",
+    "predator_counts": [
+      3,
+      8
+    ],
+    "predator_policy": "rules",
+    "prey_counts": [
+      10,
+      25,
+      50
+    ],
+    "prey_policy": "rules",
+    "reference_predators": 8,
+    "reference_prey": 50,
+    "repetitions": 5,
+    "scenario": "A",
+    "seed_group": 1,
+    "threshold_us": 500.0
+  },
+  "thread_env": {
+    "MKL_NUM_THREADS": "1",
+    "OMP_NUM_THREADS": "1",
+    "OPENBLAS_NUM_THREADS": "1"
+  },
+  "threshold_us": 500.0,
+  "timestamp_utc": "2026-11-15T18:11:44+00:00",
+  "verdict": "FAIL",
+  "world_overrides": []
+}
