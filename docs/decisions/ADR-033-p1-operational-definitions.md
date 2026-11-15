@@ -140,10 +140,23 @@ especificación de P1 y comprobados por el cargador junto con los existentes (0 
   todas las iteraciones usan las mismas claves: las comparaciones dentro del escenario son
   pareadas y las comparaciones entre escenarios son independientes. Ningún episodio se descarta
   ni se sustituye.
-- Cada fila del CSV de episodios contiene las seis componentes de las claves del episodio: las
-  cinco comunes (`purpose`, `seed_group`, `run`, `generation`, `item`) y los flujos usados
-  (ENV_INIT 3, ENV_DYNAMICS 4, POLICY_PREY 5, POLICY_PREDATOR 6; ADR-028), de modo que cualquier
-  episodio puede reconstruirse.
+- Cada episodio usa cuatro flujos, cada uno con su propia clave de seis enteros
+  `(purpose, seed_group, run, generation, item, stream)` (ADR-028). `SeedRegistry.episode_streams`
+  deriva siempre los cuatro, que comparten los cinco primeros campos y difieren solo en `stream`.
+  Cada fila del CSV de episodios los registra en nueve columnas enteras:
+  - cinco columnas con los campos comunes: `purpose` (1, PILOT), `seed_group`, `run`,
+    `generation` e `item`;
+  - cuatro columnas con el valor de `stream` de cada flujo: `stream_env_init` (3, ENV_INIT),
+    `stream_env_dynamics` (4, ENV_DYNAMICS), `stream_policy_prey` (5, POLICY_PREY) y
+    `stream_policy_predator` (6, POLICY_PREDATOR).
+
+  La clave de cada flujo es (`purpose`, `seed_group`, `run`, `generation`, `item`,
+  `stream_<flujo>`). El flujo se reconstruye exactamente con
+  `numpy.random.default_rng(numpy.random.SeedSequence(project_seed, spawn_key=clave))`, el mismo
+  cálculo que `SeedRegistry.generator`, con `project_seed` tomado de la procedencia (P1-19). Las
+  cuatro columnas de flujo se registran en todas las condiciones, aunque una política no consuma
+  números aleatorios o no haya depredadores (`no_predators`), porque `episode_streams` deriva
+  siempre los cuatro flujos.
 - **Aislamiento (D16):** las pruebas usan especificaciones sintéticas con `seed_group` ≥ 1000 y
   nunca los grupos 10–32. La ejecución de un bloque de confirmación exige una opción explícita del
   comando; sin ella, el comando la rechaza.
@@ -436,3 +449,7 @@ iteraciones; ADR de congelamiento; etiqueta `env-frozen-v1`.
   (interpretación de E3), D13 (P1-23), D14 (reglas de agregación), D15 (claves del bootstrap),
   D16 (aislamiento de pruebas y protección de la confirmación), D17 (P1-24), D18 (repetición por
   fallo de infraestructura). Se añadieron P1-23 y P1-24.
+- **Precisión documental posterior a T0b** (revisión del autor): la redacción de P1-13 sobre el
+  registro de las claves en el CSV se precisó (cinco columnas comunes y cuatro columnas de flujo,
+  y cómo se reconstruye cada flujo). No cambia ninguna decisión ni el esquema de semillas de
+  ADR-028.
