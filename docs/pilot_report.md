@@ -22,16 +22,22 @@ según la decisión A3.
 | Políticas | Por reglas en ambas especies |
 | Repeticiones | 5 episodios independientes por celda (semillas PILOT, `item` 0–4) |
 | Medida | c_step = mediana de las 5 repeticiones del tiempo medio por paso de cada episodio |
-| Criterio (A4) | c_step ≤ 500 µs con 50 presas y 8 depredadores |
-| Calentamiento | Un episodio corto previo que no se registra |
+| Criterio (A4) | c_step ≤ 500 µs con 50 presas y 8 depredadores (configuración de referencia) |
+| Orden de medición | Celdas en orden fijo (10, 25, 50 presas × 3, 8 depredadores); repeticiones consecutivas |
+| Calentamiento | Un episodio previo de hasta 50 pasos en la configuración de referencia, no registrado |
 | Reloj | `time.perf_counter`, inyectado; el dominio no lee el reloj |
 | Comando | `uv run neuroeco pilot p0` |
+
+La configuración de referencia (50 presas, 8 depredadores) es una **prueba de esfuerzo**: tiene
+el doble de presas que cualquier escenario experimental provisional. El autor la fijó así al aprobar el plan
+de F1 (A4) y confirmó que se mantiene tras conocer los resultados.
 
 ### Resultado registrado
 
 Ejecución del 2026-11-15 sobre el commit `d1b6e57` con el árbol limpio. Máquina: Windows 11,
-procesador Intel64 Family 6 Model 183 (32 hilos lógicos), Python 3.12.14, NumPy 2.5.4, un hilo
-de BLAS. Datos completos en `results/pilots/p0/`.
+procesador Intel64 Family 6 Model 183 (32 hilos lógicos), Python 3.12.14, NumPy 2.5.4, variables
+de hilos de BLAS fijadas a 1 (la verificación con threadpoolctl llega en F6). Datos completos en
+`results/pilots/p0/`.
 
 | n_prey | n_pred | Mediana (µs/paso) | Mín | Máx | Percepción | Decisión | Reglas |
 |---|---|---|---|---|---|---|---|
@@ -42,40 +48,73 @@ de BLAS. Datos completos en `results/pilots/p0/`.
 | 50 | 3 | 600.0 | 585.6 | 689.2 | 328.3 | 39.8 | 201.7 |
 | **50** | **8** | **833.0** | **583.7** | **838.1** | 465.2 | 53.1 | 274.3 |
 
+Las columnas de fase son medianas del tiempo por paso de cada fase; no suman exactamente la
+mediana total.
+
 **Veredicto: FAIL.** c_step = 833 µs en la configuración de referencia, por encima de 500 µs.
+
+**Información complementaria (no sustituye a la referencia):** la celda 25/8 coincide con el
+escenario C provisional (25 presas, 8 depredadores, 40 plantas). Su mediana es 460.4 µs y sus
+cinco repeticiones quedan entre 458.0 y 476.8 µs. El margen frente a 500 µs (8 %) es pequeño en
+comparación con la variabilidad observada entre ejecuciones (siguiente apartado). La celda 25/3
+corresponde al escenario A; el escenario B (15 plantas) no se midió.
 
 ### Variabilidad de la medición
 
-Una ejecución anterior con el mismo código de simulación (commit `652591e`) dio c_step = 574 µs en
-la referencia, con un rango de 563–584 µs. Se descartó como evidencia porque su procedencia era
-incorrecta (se registró `git_dirty` después de escribir los resultados; corregido en `d1b6e57`),
-pero muestra que **la medición varía mucho entre ejecuciones en este portátil**: 574 frente a
-833 µs para el mismo código. Las celdas se miden siempre en el mismo orden y la de referencia es
-la última, lo que es compatible con estrangulamiento térmico o de energía; no está demostrado.
+Una ejecución anterior (commit `652591e`) dio c_step = 574.3 µs en la referencia, con un rango
+de 563.5–584.4 µs. Se descartó como evidencia porque su procedencia era incorrecta (se registró
+`git_dirty` después de escribir los resultados; corregido en `d1b6e57`). Entre ambos commits solo
+cambiaron la CLI y su prueba, y la simulación es determinista (DET-1), así que **los episodios
+medidos son idénticos en las dos ejecuciones** y las diferencias se deben solo a la medición:
 
-El veredicto no depende de ese ruido: el mínimo observado en la referencia en ambas ejecuciones
-(563 y 584 µs) supera el umbral.
+- Referencia 50/8: 574.3 µs frente a 833.0 µs.
+- Dentro de la ejecución registrada, en la referencia, las repeticiones 0–2 dieron entre 833.0 y
+  838.1 µs y las repeticiones 3–4, medidas a continuación, 620.4 y 583.7 µs.
+- Celda 25/8: 482.5 µs en la ejecución anterior frente a 460.4 µs en la registrada; la diferencia
+  no va siempre en la misma dirección.
+
+La causa no está identificada. El orden fijo de medición es compatible con efectos del estado
+térmico o de energía del portátil, pero no está demostrado.
+
+El veredicto no depende de ese ruido: ninguna repetición de la referencia, en ninguna de las dos
+ejecuciones, bajó de 500 µs (mínimos de 563.5 y 583.7 µs).
 
 ### Dónde se va el tiempo
 
-Perfil de un episodio de referencia con `cProfile` (solo proporciones relativas, porque el
-perfilador añade sobrecarga):
+Según el desglose por fases de la tabla, en la referencia la percepción supone alrededor del
+56 % de la mediana total; las reglas del mundo, el 33 %; la decisión, el 6 %.
 
-- La percepción supone alrededor del 56 % del costo; las reglas del mundo el 33 %; la decisión
-  el 6 %.
-- `geometry.minimal_displacement` concentra la mayor parte del tiempo propio, con unas 8 llamadas
-  por paso. La causa es una **redundancia de la implementación**: `encode_nearest` calcula el
-  desplazamiento toroidal dos veces (una dentro de `pairwise_distances` y otra para los rumbos), y
-  la percepción presa→depredador y depredador→presa recalcula el mismo conjunto de pares.
+Un perfil con `cProfile` de un episodio de referencia (570 pasos; solo proporciones relativas,
+porque el perfilador añade sobrecarga) muestra:
 
-### Plan de optimización (pendiente de aprobación)
+- `geometry.minimal_displacement` es la función con más tiempo propio: alrededor del 33 % del
+  tiempo total bajo el perfilador, con unas 8 llamadas por paso.
+- Parte de esas llamadas son redundantes: `encode_nearest` calcula el desplazamiento toroidal dos
+  veces (una dentro de `pairwise_distances` y otra para los rumbos), y la percepción
+  presa→depredador y depredador→presa calcula los mismos pares en sentidos opuestos.
 
-| ID | Cambio | ¿Cambia algún resultado? | Efecto esperado |
+### Plan de optimización
+
+Decisión del autor del 2026-11-15. Ninguna optimización se aplica en F1; las aprobadas se
+realizarán antes de P0b (F6).
+
+| ID | Cambio | Decisión | Condición |
 |---|---|---|---|
-| O1 | Calcular el desplazamiento una sola vez en `encode_nearest` y obtener las distancias con `hypot` del mismo array | No: operaciones idénticas, resultado idéntico bit a bit | Elimina 3 de las ~8 llamadas por paso |
-| O2 | Calcular una vez por paso el desplazamiento presa↔depredador y usar su negación para la percepción del depredador | No para lo percibido: solo difiere cuando una componente vale exactamente L/2, y esa distancia supera el radio de visión por K3 | Elimina otra llamada por paso |
-| O3 | Limitar percepción e interacciones a agentes vivos y plantas activas | No | Reduce el costo a medida que mueren agentes |
-| O4 | Metodología de medición: orden de celdas aleatorizado y entrelazado, calentamiento por celda, registro del estado de energía y 3 ejecuciones completas de P0 | No (afecta solo a la medición) | Medición menos sesgada por el estado de la máquina |
+| O1 | Calcular el desplazamiento una sola vez en `encode_nearest` y obtener las distancias con `hypot` del mismo array | **Aprobada** como optimización posterior | Demostrar equivalencia bit a bit con pruebas de referencia (huella del estado en cada paso, registrada antes del cambio) y con DET-1, DET-2 y DET-5 |
+| O2 | Reutilizar la negación del desplazamiento presa→depredador para la percepción del depredador | **Descartada** | No se implementa: cambia los valores numéricos (ver abajo) |
+| O3 | Limitar percepción e interacciones a agentes vivos y plantas activas | **Aplazada** | Solo se reconsidera si una medición demuestra un beneficio real y se garantiza la equivalencia |
+| O4 | Metodología de medición: orden de celdas aleatorizado y entrelazado, calentamiento por celda, registro del estado de energía y ejecuciones adicionales de P0 | **Aprobada** como mejora de la medición | A4 no cambia: c_step y el veredicto siguen definidos por la mediana de 5 repeticiones de una ejecución en la referencia; las ejecuciones adicionales solo documentan la variabilidad |
 
-O1–O3 se verificarían con las pruebas de determinismo (DET-1, DET-2, DET-5), con una prueba de
-equivalencia entre la implementación anterior y la nueva sobre estados aleatorios, y con P0 repetido.
+**Por qué se descarta O2.** La versión anterior de este informe afirmaba que la negación del
+desplazamiento solo difería cuando una componente valía exactamente L/2. Eso es cierto en
+aritmética exacta, pero no en coma flotante: `mod(Δ + L/2, L) − L/2` redondea de forma distinta
+para Δ y −Δ. Se comprobó con 200 configuraciones aleatorias de 50 presas y 8 depredadores
+(L = 150, posiciones uniformes): difieren el 22.5 % de las componentes del desplazamiento y el
+28.2 % de las distancias, en como máximo 1.4·10⁻¹⁴ (un ulp a esa escala). Una diferencia así
+puede decidir si un objeto queda dentro del radio de visión o cómo se resuelve un empate, y
+hace divergir las trayectorias. El ahorro estimado era de unos 12 µs por paso.
+
+**Efecto esperado de O1.** En un microbenchmark aislado, el cálculo que O1 elimina cuesta unos
+78 µs por paso en la referencia (53 µs para presa→planta, 50×40, y unos 12 µs para cada sentido
+de presa↔depredador) y unos 42 µs en 25/8. Es una estimación: no se espera que O1 baste por sí
+sola para que la referencia cumpla 500 µs. El efecto real se medirá con la metodología de O4.
