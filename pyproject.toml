@@ -59,7 +59,8 @@ select = [
 # ---------------------------------------------------------------- pytest
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-ra --strict-markers"
+addopts = "-ra --strict-markers --import-mode=importlib"
+pythonpath = ["tests"]
 markers = [
     "slow: long-running tests (statistical coverage, long simulations)",
     "determinism: bit-for-bit reproducibility checks (ADR-016, ADR-028)",
