@@ -59,6 +59,7 @@ decisión se registra como un ADR (*Architecture Decision Record*) con la planti
 | [014](ADR-014-metric-definitions.md) | Definición de las métricas |
 | [017](ADR-017-c1-c3-statistical-analysis.md) | Análisis de C1 y C3 |
 | [013](ADR-013-c2-architecture-comparison-analysis.md) | Análisis de C2 |
+| [032](ADR-032-statistical-implementation.md) | Implementación estadística y protocolo de cobertura |
 | [005](ADR-005-c2-scenario-a-only.md) | C2 solo en el escenario A |
 | [004](ADR-004-number-of-runs.md) | Número de ejecuciones R |
 | [019](ADR-019-exploitation-and-generalization-tests.md) | Explotaciones y generalización |

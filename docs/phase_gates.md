@@ -185,3 +185,40 @@ pygame.
 
 **Observación para fases posteriores:** el inspector muestra `-0.0000` cuando una componente es
 un cero negativo (p·cos φ con p = 0); se conserva porque reproduce la traza tal cual.
+
+## F3: Estadística
+
+- **Inicio:** 2026-11-15, con autorización expresa del autor tras revisar el plan.
+- **Estado:** en curso.
+- **Fuera del alcance:** lectura de CSV, tablas y figuras (`analysis/report.py`, F8); regla de
+  uso del confirmatorio según R y redacción de conclusiones (F7, F8); generalización y
+  diagnósticos (F8); Δ y θ numéricos (F6, F7); área bajo la curva de validación (F6).
+- **Restricciones:** `analysis` aislada (no importa `domain`, `application`, `infrastructure`
+  ni `presentation`); sin cambios en el código de F1 y F2 ni en `uv.lock`; sin dependencias nuevas.
+
+**Decisiones aprobadas (detalle en [ADR-032](decisions/ADR-032-statistical-implementation.md)):**
+
+| ID | Decisión |
+|---|---|
+| S1 | De ADR-014, F3 implementa BCa de la media pareada, desviación estándar e IQR |
+| S2 | Prevalecen los ADR sobre la ronda de diseño B4.4: prueba de signo sin condicionar, por escenario; sin rank-biserial |
+| S3 | δ de Cliff con IC BCa sin emparejar (ADR-020 A6) |
+| S4 | Protocolo Monte Carlo de cobertura: 32 configuraciones confirmatorias y 9 informativas; N = 10 000 (id 41: N = 2 000, informativa); umbral L − 3·SE |
+| S5 | Numeradores enteros, p-valores `Fraction`, Holm exacto |
+| S6 | BCa con 9999 remuestreos por defecto, 95 %, generador proporcionado por quien llama |
+| S7 | IQR con cuantiles lineales (tipo 7); desviación estándar con `ddof=1` |
+| S8 | θ y G_θ en F3; área bajo la curva en F6 |
+| S9 | Registro en ADR-032 |
+
+**Tareas:** T0 documentación · T1 datos por ejecución · T2 signo, IC y Holm · T3 Wilcoxon y
+Hodges-Lehmann de una muestra · T4 dos muestras · T5 reglas de C2 · T6 bootstrap y variabilidad ·
+T7 cobertura · T8 cierre.
+
+| Criterio de cierre (ADR-024 y condiciones del autor) | Estado |
+|---|---|
+| Pruebas de ADR-017 (dualidad prueba-IC, casos de referencia, niveles del IC, Holm, sensibilidad, unidad = ejecución) | ⏳ |
+| Pruebas de ADR-013 (permutación exacta con empates, IC de Hodges-Lehmann, regla de no inferioridad, θ y G_θ) | ⏳ |
+| Pruebas de ADR-014 (BCa de la media pareada, desviación estándar, IQR) y δ de Cliff con BCa | ⏳ |
+| Cobertura confirmatoria (id 1–32) por encima de su umbral | ⏳ |
+| Cobertura informativa (id 33–41) documentada | ⏳ |
+| Las 273 pruebas anteriores siguen pasando; CI en Ubuntu y Windows | ⏳ |
