@@ -6,7 +6,13 @@ limpio. Las excepciones requieren aprobación explícita del autor y se registra
 ## F0: Fundaciones
 
 - **Inicio:** 2026-11-15, tras la aprobación del diseño (decisiones D1–D24).
-- **Estado:** criterios locales cumplidos; pendiente el commit inicial y el CI remoto.
+- **Cierre:** 2026-11-15.
+- **Estado:** ✅ Cerrada. Todos los criterios de aceptación cumplidos.
+- **Repositorio:** https://github.com/AndresGoGutierrez/NeuroEcosistema (privado, rama `main`).
+- **Commit verificado:** `36377fd` (`chore: initialize NeuroEcosistema project structure`), autor
+  único `AndresGoGutierrez`.
+- **CI:** ejecución `43739617067` del workflow `ci`: `checks (ubuntu-latest)` success y
+  `checks (windows-latest)` success.
 
 | Criterio | Evidencia | Estado |
 |---|---|---|
@@ -18,5 +24,16 @@ limpio. Las excepciones requieren aprobación explícita del autor y se registra
 | Semilla del proyecto fijada | `configs/base.yaml`, 128 bits, generada con `secrets.randbits(128)` | ✅ |
 | ADR de las decisiones aprobadas | `docs/decisions/`: ADR-001 a ADR-030 e índice por ejes de §5 | ✅ |
 | README con instrucciones de instalación | `README.md` | ✅ |
-| CI en verde | `.github/workflows/ci.yml` (Ubuntu y Windows) | ⏳ Requiere repositorio remoto |
-| Commit limpio | — | ⏳ Pendiente de autorización |
+| CI en verde | `.github/workflows/ci.yml`, ejecución `43739617067`: Ubuntu y Windows en success | ✅ |
+| Commit limpio | `36377fd` publicado en `origin/main`; árbol de trabajo limpio | ✅ |
+| Documento de la propuesta excluido | `Propuesta_Proyecto_Final_*.docx` ignorado por `.gitignore`; no figura en el repositorio | ✅ |
+
+**Incidencias durante el cierre:**
+
+- El primer push fue rechazado porque el token de GitHub no tenía el permiso `workflow`. El autor
+  actualizó el token y el push se repitió.
+- Por decisión del autor, el primer repositorio se eliminó y se creó de nuevo para retirar la
+  línea de coautoría de la IA del commit inicial. El contenido del commit no cambió.
+
+**Pendiente, sin bloquear el cierre:** revisión por el autor de la justificación provisional de
+ADR-027 (descarte del aprendizaje supervisado).
