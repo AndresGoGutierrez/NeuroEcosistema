@@ -54,4 +54,4 @@ Las conclusiones son condicionales a los conjuntos fijos de validación y prueba
 ## Verificación
 
 F0: `tests/test_project_seed.py`. F1: claves de 6 enteros en [0, 2³²), propósitos disjuntos,
-re-derivación idéntica, pruebas D1, D2 y D5.
+re-derivación idéntica, pruebas DET-1, DET-2 y DET-5 (catálogo en `docs/architecture.md`).

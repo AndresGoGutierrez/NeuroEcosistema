@@ -21,8 +21,13 @@ en el dominio duplicaría el modelo de configuración.
 
 ## Evidencia disponible
 
-Analítica: las invariantes (≥ 2 capas ocultas, K1–K4, E1, E2, E5) son reglas del dominio y
-deben cumplirse aunque no exista un validador externo.
+Analítica: las invariantes (≥ 2 capas ocultas, K1–K4) son reglas del dominio y deben cumplirse
+aunque no exista un validador externo.
+
+E1, E2 y E5 (ADR-030) **no** son invariantes: son objetivos de calibración que P1 comprueba y
+reporta (criterio A1 de ADR-020). Si se validaran en la construcción, las pruebas unitarias no
+podrían usar mundos pequeños (por ejemplo, energía baja para provocar inanición rápida).
+Aclaración aprobada por el autor al planificar F1 (2026-11-15).
 
 ## Criterio de selección
 
@@ -31,7 +36,9 @@ Un solo modelo de configuración y las invariantes donde pertenecen.
 ## Decisión
 
 - Parámetros como `dataclasses` inmutables (`frozen=True`) en dominio y aplicación, con
-  validación en `__post_init__`.
+  validación de las invariantes en `__post_init__`.
+- E1, E2 y E5 se evalúan con una función de comprobación del dominio que devuelve el resultado de
+  cada restricción, sin rechazar la configuración.
 - `infrastructure/config_loader.py`: YAML → diccionarios → dataclasses, **rechazando claves
   desconocidas**; aplica sobrescrituras `--set`.
 - Se elimina Pydantic de las dependencias.
@@ -42,4 +49,5 @@ La configuración resuelta se vuelca y se resume con un hash en cada ejecución.
 
 ## Verificación
 
-F1: pruebas del cargador (claves desconocidas, tipos, invariantes, sobrescrituras).
+F1: pruebas del cargador (claves desconocidas, tipos, invariantes, sobrescrituras) y de la
+función de comprobación de E1, E2 y E5.

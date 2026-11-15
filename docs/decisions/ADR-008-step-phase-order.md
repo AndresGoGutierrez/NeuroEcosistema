@@ -50,4 +50,5 @@ Una presa capturada no come en ese paso; una presa que muere de hambre no cuenta
 
 ## Verificación
 
-F1: pruebas unitarias de cada fase y de su orden; prueba de determinismo D1.
+F1: pruebas unitarias de cada fase y de su orden; prueba de determinismo DET-1
+(catálogo en `docs/architecture.md`).

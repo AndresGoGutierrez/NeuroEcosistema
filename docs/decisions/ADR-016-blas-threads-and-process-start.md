@@ -45,4 +45,5 @@ Mecanismo válido sin importar el orden de importación, y verificable.
 
 ## Verificación
 
-F6: prueba D3 (secuencial = 1 worker = 4 workers, bit a bit) y verificación de un hilo en el manifest.
+F6: prueba DET-3 (secuencial = 1 worker = 4 workers, bit a bit) y verificación de un hilo en el
+manifest. Catálogo de pruebas de determinismo en `docs/architecture.md`.

@@ -40,6 +40,23 @@ analysis (stats, report) ── solo lee ──► results/*.csv
 | `tests/architecture/test_layer_imports.py` | Lista blanca estricta: cualquier importación de `domain` o `application` que no sea stdlib, `numpy` o un paquete interno permitido hace fallar la prueba (incluye importaciones relativas) |
 | `ruff` (TID251, NPY002) | Prohíbe el módulo `random` y la API global heredada `np.random.*` en todo el código |
 
+## Pruebas de determinismo
+
+Catálogo de pruebas de reproducibilidad (ADR-016, ADR-028). Se identifican como DET-n para no
+confundirlas con las decisiones de diseño D1–D24.
+
+| ID | Comprobación | Fase |
+|---|---|---|
+| DET-1 | El mismo episodio ejecutado dos veces en el mismo proceso produce el mismo hash SHA-256 del estado en cada paso | F1 |
+| DET-2 | El mismo episodio ejecutado en un proceso independiente produce el mismo hash | F1 |
+| DET-3 | Ejecutor secuencial, pool de 1 worker y pool de 4 workers producen resultados idénticos bit a bit | F6 |
+| DET-4 | Guardar y cargar un modelo conserva sus salidas | F5 |
+| DET-5 | Cambiar de política con la misma semilla conserva el entorno: posiciones iniciales y cola de reaparición de plantas | F1 |
+| DET-6 | Regresión de métricas resumen entre máquinas, con tolerancia | F6 |
+
+La reproducibilidad bit a bit se exige en la misma máquina con el mismo `uv.lock`; entre
+máquinas es estadística (ADR-016).
+
 ## Estructura prevista
 
 ```
