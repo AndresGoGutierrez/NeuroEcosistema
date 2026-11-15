@@ -16,6 +16,8 @@ from enum import IntEnum
 
 import numpy as np
 
+from neuroeco.domain.state import EpisodeStreams
+
 KEY_LENGTH = 6
 FIELD_LIMIT = 2**32  # each field must fit in an unsigned 32-bit word
 PROJECT_SEED_LIMIT = 2**128
@@ -92,3 +94,18 @@ class SeedRegistry:
         """A fresh ``Generator`` (PCG64) for the given key."""
         key = make_key(purpose, seed_group, run, generation, item, stream)
         return np.random.default_rng(self.sequence(key))
+
+    def episode_streams(
+        self, purpose: Purpose, seed_group: int, run: int, generation: int, item: int
+    ) -> EpisodeStreams:
+        """The four independent streams of one episode (ADR-028)."""
+
+        def stream(kind: Stream) -> np.random.Generator:
+            return self.generator(purpose, seed_group, run, generation, item, kind)
+
+        return EpisodeStreams(
+            env_init=stream(Stream.ENV_INIT),
+            env_dynamics=stream(Stream.ENV_DYNAMICS),
+            policy_prey=stream(Stream.POLICY_PREY),
+            policy_predator=stream(Stream.POLICY_PREDATOR),
+        )
