@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import dataclasses
+import datetime as dt
 import math
 import statistics
 import sys
@@ -17,6 +18,7 @@ from neuroeco.application.configs import ResolvedConfig
 from neuroeco.application.evaluation import EpisodeIdentity, run_episode, time_episode
 from neuroeco.application.metrics import EpisodeMetrics, Ratio
 from neuroeco.application.seeding import Purpose
+from neuroeco.application.session import run_session
 from neuroeco.bootstrap import (
     DEFAULT_CONFIG_DIR,
     EXPLORATORY_SEED_GROUP,
@@ -29,7 +31,13 @@ from neuroeco.domain.simulator import PHASES
 from neuroeco.domain.state import InitializationError
 from neuroeco.infrastructure.config_loader import ConfigError, load_p0_spec
 from neuroeco.infrastructure.provenance import collect_provenance
-from neuroeco.infrastructure.storage import write_csv, write_json
+from neuroeco.infrastructure.storage import (
+    new_run_directory,
+    replace_json,
+    write_csv,
+    write_json,
+)
+from neuroeco.presentation.inspector import SessionInfo
 
 app = typer.Typer(no_args_is_help=True, help="NeuroEcosistema command-line interface.")
 pilot_app = typer.Typer(no_args_is_help=True, help="Pilot studies.")
@@ -144,6 +152,107 @@ def run(
         f"predators alive     {m.predators_alive_end} / {config.world.n_predators}",
     ]
     typer.echo("\n".join(lines))
+
+
+def _utc_now() -> str:
+    return dt.datetime.now(dt.UTC).isoformat(timespec="seconds")
+
+
+@app.command()
+def view(
+    scenario: Annotated[str, typer.Option(help="Scenario: A, B or C.")] = "A",
+    prey: Annotated[str, typer.Option(help=f"Prey policy: {', '.join(REFERENCE_POLICIES)}.")] = (
+        "rules"
+    ),
+    predator: Annotated[str, typer.Option(help="Predator policy (same choices).")] = "rules",
+    episode: Annotated[int, typer.Option(min=0, help="Episode index (seed item).")] = 0,
+    overrides: Annotated[
+        list[str] | None, typer.Option("--set", help="Override, e.g. world.n_predators=10.")
+    ] = None,
+    config_dir: Annotated[Path, typer.Option(help="Configuration directory.")] = (
+        DEFAULT_CONFIG_DIR
+    ),
+    output_dir: Annotated[Path, typer.Option(help="Where session records are written.")] = Path(
+        "runs/view"
+    ),
+    paused: Annotated[bool, typer.Option(help="Start paused at the initial state.")] = True,
+    speed: Annotated[int, typer.Option(help="Initial steps per frame: 1, 2, 4, 8, 16, 32.")] = 1,
+    fps: Annotated[int, typer.Option(min=0, help="Frame-rate cap (0 = unlimited).")] = 30,
+    exit_at_end: Annotated[
+        bool, typer.Option(help="Close the window when the episode ends.")
+    ] = False,
+) -> None:
+    """Watch one exploratory episode (same seeds as `run`) with the HUD and the inspector."""
+    try:
+        # pygame is imported here only: `run` and `pilot` never load it (ADR-031).
+        from neuroeco.presentation.viewer import SPEEDS, Viewer, ViewerClosed
+
+        if speed not in SPEEDS:
+            raise ValueError(f"speed must be one of {SPEEDS}, got {speed}")
+        runtime = build_runtime(scenario, overrides or (), config_dir)
+        config = runtime.config
+        prey_policy = build_policy(prey, "prey", config)
+        predator_policy = build_policy(predator, "predator", config)
+    except USER_ERRORS as error:
+        typer.echo(f"error: {error}", err=True)
+        raise typer.Exit(code=1) from error
+
+    identity = EpisodeIdentity(Purpose.PILOT, EXPLORATORY_SEED_GROUP, item=episode)
+    options = {"paused": paused, "speed": speed, "fps": fps, "exit_at_end": exit_at_end}
+    # Provenance first, so `git_dirty` describes the code, not the record written below.
+    provenance = collect_provenance(sys.argv, Path.cwd(), config.config_hash)
+    directory = new_run_directory(output_dir, dt.datetime.now(dt.UTC))
+    record_path = directory / "session.json"
+    record = build_view_record(
+        session_id=directory.name,
+        config=config,
+        overrides=overrides or (),
+        prey_policy=prey,
+        predator_policy=predator,
+        identity=identity,
+        viewer_options=options,
+        provenance=provenance,
+    )
+    replace_json(record_path, record)  # exists before the episode starts (decision V2)
+    typer.echo(f"session record: {record_path}")
+
+    info = SessionInfo(scenario, prey, predator, episode, config.config_hash)
+    viewer = None
+    exit_code = 0
+    try:
+        viewer = Viewer(
+            config.world, info, paused=paused, speed=speed, fps=fps, exit_at_end=exit_at_end
+        )
+        result = run_session(
+            config.world, prey_policy, predator_policy, runtime.registry, identity, viewer
+        )
+        record.update(
+            status="completed",
+            ended_utc=_utc_now(),
+            steps_completed=result.metrics.steps,
+            metrics=metrics_to_json(result.metrics),
+        )
+        replace_json(record_path, record)
+        viewer.finish()
+    except ViewerClosed as closed:
+        record.update(status="closed", ended_utc=_utc_now(), steps_completed=closed.step)
+    except KeyboardInterrupt:
+        steps = viewer.frame.step if viewer is not None and viewer.frame is not None else None
+        record.update(status="interrupted", ended_utc=_utc_now(), steps_completed=steps)
+        exit_code = 130
+    except Exception as error:
+        record.update(
+            status="error", ended_utc=_utc_now(), error=f"{type(error).__name__}: {error}"
+        )
+        replace_json(record_path, record)
+        raise
+    finally:
+        if viewer is not None:
+            viewer.close()
+    replace_json(record_path, record)
+    typer.echo(f"status {record['status']}, steps {record['steps_completed']}")
+    if exit_code:
+        raise typer.Exit(code=exit_code)
 
 
 P0_EPISODE_COLUMNS = (
