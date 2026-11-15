@@ -4,7 +4,34 @@
 docs/phase_gates.md). They exist only to exercise the code; P1 replaces them.
 """
 
+import hashlib
+
+import numpy as np
+
 from neuroeco.domain.params import SpeciesParams, WorldParams
+from neuroeco.domain.state import WorldState
+
+
+def state_digest(world: WorldState) -> str:
+    """SHA-256 of the complete world state, including dtypes and shapes (DET tests)."""
+    digest = hashlib.sha256(str(world.step).encode())
+    arrays = []
+    for species in (world.prey, world.predators):
+        arrays += [
+            species.positions,
+            species.headings,
+            species.energy,
+            species.alive,
+            species.death_step,
+            species.death_cause,
+        ]
+    arrays += [world.plants.positions, world.plants.active, world.plants.regrow_at]
+    for array in arrays:
+        contiguous = np.ascontiguousarray(array)
+        digest.update(f"{contiguous.dtype.str}{contiguous.shape}".encode())
+        digest.update(contiguous.tobytes())
+    return digest.hexdigest()
+
 
 PROVISIONAL_PREY = SpeciesParams(
     v_max=1.0,
