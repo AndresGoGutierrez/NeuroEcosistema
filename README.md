@@ -19,7 +19,8 @@ del proyecto y no se incluye en este repositorio. Las secciones de la propuesta 
 | F1 | Núcleo de simulación y piloto P0 | Cerrada (P0 con plan de optimización) |
 | F2 | Visualización: visor, HUD, inspector y registro de `--set` | Completada |
 | F3 | Estadística: métodos de ADR-013, ADR-014 y ADR-017 y pruebas de cobertura | Completada |
-| F4–F9 | Calibración, redes, neuroevolución, protocolo, experimentos, entregables | Pendientes |
+| F4 | Calibración ecológica (piloto P1) y congelamiento del entorno | En curso |
+| F5–F9 | Redes, neuroevolución, protocolo, experimentos, entregables | Pendientes |
 
 El plan completo y los criterios de cierre de cada fase están en
 [docs/decisions/ADR-024-phase-plan-and-gates.md](docs/decisions/ADR-024-phase-plan-and-gates.md)

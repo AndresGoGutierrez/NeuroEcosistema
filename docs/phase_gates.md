@@ -286,3 +286,50 @@ local, más que los ≈ 80 s estimados en ADR-032; no cambia ningún parámetro 
   convirtieron en listas tras la primera ejecución, sin cambiar parámetros, semillas ni
   resultados (comprobado con una segunda ejecución idéntica).
 - Ningún fallo de pruebas, push ni CI.
+
+## F4: P1, calibración ecológica
+
+- **Inicio:** 2026-11-15, con autorización expresa del autor limitada a T0.
+- **Estado:** 🔄 En curso. T0 (documentación) en revisión; T1 y la ejecución de episodios no
+  están autorizadas.
+- **Criterio de cierre (ADR-024):** criterios de ADR-020 (clase A completa en la confirmación;
+  cada B cumplido o aceptado mediante ADR; cada C investigado y documentado), `p_flee` y
+  `u_cruise` ajustados y congelados (ADR-012) y etiqueta `env-frozen-v1`.
+- **Fuera del alcance:** redes, ablación y activaciones (F5); optimizaciones O1 y O4, P0b y
+  algoritmo genético (F6); variantes de oponentes como evaluación y diagnósticos X2 (F7, F8).
+- **Restricciones:** sin redes en P1; sin cambios en el comportamiento del núcleo de F1, en las
+  métricas ni en el esquema de semillas; sin dependencias nuevas ni cambios en `uv.lock`; sin
+  modificar ADR aprobados; semillas, tamaños, tolerancias y umbrales fijados antes de ver datos;
+  ningún episodio descartado; única excepción en código cerrado: la prueba de P1-2.
+
+**Decisiones (detalle en [ADR-033](decisions/ADR-033-p1-operational-definitions.md)):**
+
+| ID | Decisión | Estado |
+|---|---|---|
+| P1-1 | Clave de semilla del bootstrap calculada por la aplicación y registrada en CSV; `analysis` reconstruye el generador | Aprobada |
+| P1-2 | Sustitución, en el congelamiento, de la prueba de F1 que fija los valores provisionales | Aprobada |
+| P1-3 | Definición operativa de A4 | Aprobada |
+| P1-4 | Rejillas `p_flee` ∈ {0.2, 0.3, 0.4, 0.5} y `u_cruise` ∈ {0.3, 0.5, 0.7}; todas las combinaciones registradas; empates por un orden fijo | Aprobada |
+| P1-5 | 30 episodios por escenario en calibración; confirmación con 50 semillas nuevas | Aprobada |
+| P1-6 | Etapa A: `plant_energy` y `regrow_delay`, después `n_plants`; sin cambiar geometría ni especies | Aprobada |
+| P1-7 | B2: diferencia media pareada reglas − aleatoria > 0; BCa descriptivo | Aprobada |
+| P1-8 | Lotes con `n_predators = 0` en A y B | Aprobada |
+| P1-9 | C4: menos de una captura media por episodio | Aprobada |
+| P1-10 | `application/calibration.py` y `analysis/calibration.py` | Aprobada |
+| P1-11 | Valores congelados en un ADR nuevo | Aprobada |
+| P1-12 | `env-frozen-v1` solo al final y con autorización expresa | Aprobada |
+| P1-13 | `seed_group` 10–12 (calibración), 20–22 (confirmación), 30–32 (segunda confirmación) | Pendiente de revisión |
+| P1-14 | 35 condiciones por bloque (reglas, aleatorias, 8 sondas, sin depredadores) | Pendiente de revisión |
+| P1-15 | Criterios sin escenario nombrado: en cada escenario; A3 con las dos métricas primarias | Pendiente de revisión |
+| P1-16 | Fórmula exacta de cada criterio A, B y C | Pendiente de revisión |
+| P1-17 | Rejilla por especie, rondas (como máximo 3) y orden de desempate | Pendiente de revisión |
+| P1-18 | Iteraciones de un solo parámetro, límite por etapa y escenarios por etapa | Pendiente de revisión |
+| P1-19 | Registro previo de cada iteración en un commit antes de ejecutarla | Pendiente de revisión |
+| P1-20 | Composición de las claves del bootstrap | Pendiente de revisión |
+| P1-21 | Condiciones de entrada a la confirmación | Pendiente de revisión |
+| P1-22 | Comprobaciones del observador A2 | Pendiente de revisión |
+
+**Tareas previstas:** T0 documentación · T1 especificación y cargador de P1 · T2 comprobador A2 y
+ejecución por bloques · T3 comando `pilot p1` · T4 evaluación de criterios desde CSV ·
+T5… iteraciones de calibración · confirmación · congelamiento (P1-2, ADR de valores, etiqueta) ·
+cierre.
