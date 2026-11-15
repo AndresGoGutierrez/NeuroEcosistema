@@ -106,3 +106,33 @@ su verificación visual manual antes del cierre.
 commit; CI en Ubuntu y Windows después de cada tarea; comprobación de que la prueba de hashes
 falla ante una interferencia inyectada y de que el contrato de pygame detecta una importación
 prohibida; revisión de capturas; verificación visual del autor en su equipo.
+
+### 2026-11-15: F3 (estadística)
+
+**Uso:** revisión de ADR-013, ADR-014, ADR-017 y ADR-020 para el plan de F3; propuesta de las
+decisiones S1–S9 y del protocolo de cobertura; redacción de ADR-032; implementación de
+`analysis/stats.py` (datos por ejecución, prueba de signo, IC exactos, Holm, Wilcoxon,
+Hodges-Lehmann, permutación de dos muestras, δ de Cliff, reglas de C2, BCa, variabilidad) y de
+sus pruebas, incluidas las de cobertura Monte Carlo.
+
+**Recomendaciones corregidas o ajustadas por el autor:**
+
+| Propuesta de la IA | Observación del autor | Resolución |
+|---|---|---|
+| Protocolo de cobertura descrito solo en términos generales | Exigió documentar antes de ejecutar distribuciones, parámetros, tamaños, semillas, N, fórmula del SE, umbral y qué es confirmatorio | Protocolo completo en ADR-032 antes de la primera ejecución |
+| N = 10 000 en todas las configuraciones | La IA detectó, antes de implementar, que el id 41 costaría unos 7 minutos por sistema y push; el autor eligió entre las alternativas | Id 41 con N = 2 000, solo informativo |
+
+**Errores detectados por la propia IA:**
+
+- Dos fracciones de ADR-032 (colas de Hodges-Lehmann para n = 8 y 9) mal transcritas;
+  detectadas por enumeración y corregidas antes del commit.
+- El plan afirmaba que el paquete `analysis` no existía; se detectó al crear el archivo y se
+  conservó el original.
+- Una prueba con un cálculo superfluo de scipy y recálculos innecesarios, reescrita antes del
+  commit; avisos de pytest por generadores en `parametrize`, corregidos sin cambiar resultados.
+
+**Validaciones:** p-valores exactos comparados por igualdad de fracciones; contraste con scipy
+y con enumeraciones ingenuas independientes; dualidad prueba-intervalo; reproducibilidad del
+bootstrap; protocolo de cobertura ejecutado sin cambios tras su registro; `ruff`,
+`lint-imports` (4 contratos) y `pytest` (438 pruebas) antes de cada commit; CI en Ubuntu y
+Windows después de cada tarea.

@@ -189,7 +189,11 @@ un cero negativo (p·cos φ con p = 0); se conserva porque reproduce la traza ta
 ## F3: Estadística
 
 - **Inicio:** 2026-11-15, con autorización expresa del autor tras revisar el plan.
-- **Estado:** en curso.
+- **Cierre:** 2026-11-15.
+- **Estado:** ✅ Cerrada. Todos los criterios de ADR-024 y las condiciones del autor cumplidos.
+- **Último commit de código:** `09563e3` (`test(analysis): add Monte Carlo coverage protocol of
+  ADR-032`), autor único `AndresGoGutierrez`; CI `43765852368`: Ubuntu y Windows en success,
+  438 pruebas en cada sistema, sin omitidas.
 - **Fuera del alcance:** lectura de CSV, tablas y figuras (`analysis/report.py`, F8); regla de
   uso del confirmatorio según R y redacción de conclusiones (F7, F8); generalización y
   diagnósticos (F8); Δ y θ numéricos (F6, F7); área bajo la curva de validación (F6).
@@ -214,11 +218,71 @@ un cero negativo (p·cos φ con p = 0); se conserva porque reproduce la traza ta
 Hodges-Lehmann de una muestra · T4 dos muestras · T5 reglas de C2 · T6 bootstrap y variabilidad ·
 T7 cobertura · T8 cierre.
 
-| Criterio de cierre (ADR-024 y condiciones del autor) | Estado |
-|---|---|
-| Pruebas de ADR-017 (dualidad prueba-IC, casos de referencia, niveles del IC, Holm, sensibilidad, unidad = ejecución) | ⏳ |
-| Pruebas de ADR-013 (permutación exacta con empates, IC de Hodges-Lehmann, regla de no inferioridad, θ y G_θ) | ⏳ |
-| Pruebas de ADR-014 (BCa de la media pareada, desviación estándar, IQR) y δ de Cliff con BCa | ⏳ |
-| Cobertura confirmatoria (id 1–32) por encima de su umbral | ⏳ |
-| Cobertura informativa (id 33–41) documentada | ⏳ |
-| Las 273 pruebas anteriores siguen pasando; CI en Ubuntu y Windows | ⏳ |
+**Commits:**
+
+| Tarea | Commit | CI (Ubuntu y Windows) |
+|---|---|---|
+| T0 ADR-032, plan y estado | `cbcfcd1` | `43763385687` ✅ |
+| T1 datos por ejecución | `fc327ff` | `43763618490` ✅ |
+| T2 signo, IC y Holm | `6085a82` | `43763857994` ✅ |
+| T3 Wilcoxon y Hodges-Lehmann de una muestra | `fc23efe` | `43764078291` ✅ |
+| T4 dos muestras | `5cd83bd` | `43764327137` ✅ |
+| T5 reglas de C2 | `a9b039b` | `43764559573` ✅ |
+| T6 bootstrap y variabilidad | `fb0a489` | `43764960630` ✅ |
+| T7 cobertura | `09563e3` | `43765852368` ✅ |
+
+| Criterio de cierre (ADR-024 y condiciones del autor) | Evidencia | Estado |
+|---|---|---|
+| Pruebas de ADR-017 | `tests/unit/analysis/test_sign_and_holm.py`: p exactos 2/256, 18/256, 22/1024 y 112/1024 (igualdad de `Fraction`); niveles del IC n = 6…10; dualidad prueba-IC con datos enteros con ceros y empates, n = 6…12 (14 000 casos); acuerdo con scipy; Holm (ejemplo de libro, monotonía, m fijo). `test_one_sample_sensitivity.py`: Wilcoxon exacto (scipy sin empates, enumeración ingenua con empates y ceros), Hodges-Lehmann de una muestra (niveles, equivariancia, dualidad). `test_run_data.py`: rechazo de `run_id` repetidos | ✅ |
+| Pruebas de ADR-013 | `test_two_sample.py`: separación total 6×6 → 2/924; scipy sin empates y enumeración ingenua con empates y censura; [D₍₆₎, D₍₃₁₎] al 443/462; equivariancia, antisimetría y dualidad; δ de Cliff (±1, antisimetría, 2U/mn − 1). `test_c2_rules.py`: tabla de no inferioridad con fronteras, aviso de IQR, θ y G_θ con censura | ✅ |
+| Pruebas de ADR-014 y δ de Cliff con BCa (S1, S3) | `test_bootstrap.py`: BCa de la media pareada idéntico a scipy, misma semilla → mismo IC, datos constantes "no estimable" sin excepciones ni avisos, δ de Cliff por rangos igual a la definición por pares (con empates), desviación estándar con ddof = 1; IQR tipo 7 en `test_c2_rules.py` | ✅ |
+| Cobertura confirmatoria (id 1–32) ≥ L − 3·SE | `tests/stats/test_coverage.py`: las 32 configuraciones por encima de su umbral (tabla siguiente) | ✅ |
+| Cobertura informativa (id 33–41) documentada | Tabla siguiente | ✅ |
+| Pruebas anteriores intactas; CI en Ubuntu y Windows | 438 pruebas en verde (las 273 previas, sin cambios); sin cambios en `domain`, `application`, `infrastructure`, `presentation`, `launcher`, `bootstrap`, `configs`, `pyproject.toml` ni `uv.lock` desde `2458885` | ✅ |
+
+**Resultados de cobertura** (primera ejecución del protocolo de ADR-032, en local; N = 10 000
+salvo id 41). En CI las mismas pruebas pasaron en Ubuntu y Windows; el log no muestra los valores
+porque pytest captura la salida:
+
+| id | Configuración | n = 6 | n = 7 | n = 8 | n = 9 | n = 10 |
+|---|---|---|---|---|---|---|
+| | Nivel L del IC por signos | 0.96875 | 0.98438 | 0.99219 | 0.96094 | 0.97852 |
+| | Umbral L − 3·SE | 0.96353 | 0.98065 | 0.98955 | 0.95513 | 0.97417 |
+| 1–5 | Signos, Normal(0.4, 1) | 0.96720 | 0.98510 | 0.99320 | 0.95850 | 0.97860 |
+| 6–10 | Signos, Exponencial(1) | 0.96990 | 0.98490 | 0.99180 | 0.96060 | 0.97790 |
+| 11–15 | Signos, round(Normal(0.3, 2)) | 0.98820 | 0.99510 | 0.99710 | 0.98900 | 0.99430 |
+| 16–20 | Signos, Poisson(3) − 3 | 0.99120 | 0.99770 | 0.99930 | 0.99250 | 0.99700 |
+| | Nivel L de Hodges-Lehmann (una muestra) | 0.96875 | 0.95312 | 0.96094 | 0.96094 | 0.95117 |
+| | Umbral L − 3·SE | 0.96353 | 0.94678 | 0.95513 | 0.95513 | 0.94471 |
+| 21–25 | Hodges-Lehmann, Normal(0.5, 1) | 0.96840 | 0.94980 | 0.96520 | 0.95550 | 0.95110 |
+| 26–30 | Hodges-Lehmann, Laplace(0.5, 1) | 0.96930 | 0.95260 | 0.96330 | 0.95940 | 0.94910 |
+| 33–37 | *Informativa:* Hodges-Lehmann, Uniforme{−2, …, 4} | 0.98940 | 0.97610 | 0.97850 | 0.98280 | 0.97980 |
+
+| id | Configuración | Nivel L | Umbral | Cobertura | SE | Resultado |
+|---|---|---|---|---|---|---|
+| 31 | Hodges-Lehmann 6×6, Normal, Δ = 0.7 | 0.95887 | 0.95292 | 0.95910 | 0.00199 | ✅ |
+| 32 | Hodges-Lehmann 6×6, Exponencial, Δ = 0.7 | 0.95887 | 0.95292 | 0.95900 | 0.00199 | ✅ |
+| 38 | *Informativa:* Hodges-Lehmann 6×6, Poisson, Δ = 1 | 0.95887 | — | 0.98690 | 0.00199 | Documentada |
+| 39 | *Informativa:* BCa media pareada, Normal(0.3, 1), n = 50 | 0.95 | — | 0.94230 | 0.00218 | Documentada |
+| 40 | *Informativa:* BCa media pareada, Exponencial − 0.7, n = 50 | 0.95 | — | 0.93300 | 0.00218 | Documentada |
+| 41 | *Informativa:* BCa δ de Cliff, 50×50, N = 2 000 | 0.95 | — | 0.95600 | 0.00487 | Documentada |
+
+Las 32 confirmatorias superan su umbral. Con datos discretos, el IC por signos y Hodges-Lehmann
+resultan conservadores, como se esperaba. El BCa de la media pareada cubre algo menos del
+nominal con n = 50 (0.942 y 0.933 con asimetría); es informativo y no decide, pero conviene
+tenerlo presente al interpretar los intervalos de nivel de episodio (F8).
+
+**Duración de las pruebas** (`pytest` completo, 438 pruebas): local 3 min 22 s; CI Ubuntu
+3 min 26 s; CI Windows 5 min 56 s (antes de F3: unos 12 s y 23 s). El id 41 tardó 119 s en
+local, más que los ≈ 80 s estimados en ADR-032; no cambia ningún parámetro del protocolo.
+
+**Incidencias durante F3:**
+
+- El plan afirmaba que el paquete `analysis` no existía; existía su `__init__.py` desde F0. Se
+  conservó intacto y T1 solo añadió `stats.py`.
+- Antes del commit de T0 se corrigieron dos fracciones de ADR-032 (colas de Hodges-Lehmann
+  para n = 8 y 9) verificadas por enumeración; los niveles decimales ya eran correctos.
+- Las pruebas de cobertura generaban dos avisos de pytest (generadores en `parametrize`); se
+  convirtieron en listas tras la primera ejecución, sin cambiar parámetros, semillas ni
+  resultados (comprobado con una segunda ejecución idéntica).
+- Ningún fallo de pruebas, push ni CI.
