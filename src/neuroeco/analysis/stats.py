@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import itertools
 import statistics
+import warnings
 from collections.abc import Callable, Hashable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
@@ -21,6 +22,7 @@ from math import comb
 from types import MappingProxyType
 
 import numpy as np
+from scipy import stats as scipy_stats
 
 CONFIDENCE = Fraction(95, 100)
 
@@ -531,3 +533,110 @@ def generations_to_threshold(
         if value >= theta:
             return GenerationsToThreshold(int(generation), censored=False)
     return GenerationsToThreshold(total_generations + k_val, censored=True)
+
+
+# ---------------------------------------------------------- bootstrap and variability (ADR-014)
+
+BOOTSTRAP_RESAMPLES = 9999  # ADR-032, S6
+BOOTSTRAP_CONFIDENCE = 0.95
+
+
+def standard_deviation(values: Sequence[float]) -> float:
+    """Sample standard deviation with ddof = 1 (ADR-032, S7)."""
+    data = np.asarray(_values(values), dtype=np.float64)
+    if data.size < 2:
+        raise ValueError("the standard deviation needs at least two values")
+    return float(np.std(data, ddof=1))
+
+
+@dataclass(frozen=True)
+class BootstrapInterval:
+    estimate: float
+    lower: float | None  # None when not estimable
+    upper: float | None
+    estimable: bool
+    confidence: float
+    resamples: int
+
+
+def _check_generator(rng: object) -> np.random.Generator:
+    if not isinstance(rng, np.random.Generator):
+        raise TypeError("the bootstrap needs a numpy Generator supplied by the caller (ADR-032)")
+    return rng
+
+
+def _bca(
+    samples: tuple[np.ndarray, ...],
+    statistic: Callable[..., np.ndarray],
+    estimate: float,
+    rng: np.random.Generator,
+    resamples: int,
+    confidence: float,
+) -> BootstrapInterval:
+    if resamples < 1:
+        raise ValueError("resamples must be >= 1")
+    with warnings.catch_warnings():
+        # Degenerate data (e.g. constant values) give NaN: reported as "not estimable".
+        warnings.simplefilter("ignore", scipy_stats.DegenerateDataWarning)
+        warnings.simplefilter("ignore", RuntimeWarning)
+        result = scipy_stats.bootstrap(
+            samples,
+            statistic,
+            n_resamples=resamples,
+            confidence_level=confidence,
+            method="BCa",
+            paired=False,
+            vectorized=True,
+            rng=rng,
+        )
+    lower, upper = float(result.confidence_interval.low), float(result.confidence_interval.high)
+    if not (np.isfinite(lower) and np.isfinite(upper)):
+        return BootstrapInterval(estimate, None, None, False, confidence, resamples)
+    return BootstrapInterval(estimate, lower, upper, True, confidence, resamples)
+
+
+def _mean(sample: np.ndarray, axis: int = -1) -> np.ndarray:
+    return np.mean(sample, axis=axis)
+
+
+def paired_mean_bca(
+    differences: Sequence[float],
+    rng: np.random.Generator,
+    resamples: int = BOOTSTRAP_RESAMPLES,
+    confidence: float = BOOTSTRAP_CONFIDENCE,
+) -> BootstrapInterval:
+    """Mean of the paired differences with its BCa interval (ADR-014, episode level)."""
+    data = np.asarray(_values(differences), dtype=np.float64)
+    if data.size < 2:
+        raise ValueError("the bootstrap needs at least two values")
+    return _bca((data,), _mean, float(data.mean()), _check_generator(rng), resamples, confidence)
+
+
+def _cliffs_delta_ranks(a: np.ndarray, b: np.ndarray, axis: int = -1) -> np.ndarray:
+    """Vectorized Cliff's delta through mid-ranks: 2U / (n_a n_b) - 1 (same value as pairs)."""
+    n_a, n_b = a.shape[-1], b.shape[-1]
+    ranks = scipy_stats.rankdata(np.concatenate((a, b), axis=-1), axis=-1)
+    u = ranks[..., :n_a].sum(axis=-1) - n_a * (n_a + 1) / 2
+    return 2 * u / (n_a * n_b) - 1
+
+
+def cliffs_delta_bca(
+    a: Sequence[float],
+    b: Sequence[float],
+    rng: np.random.Generator,
+    resamples: int = BOOTSTRAP_RESAMPLES,
+    confidence: float = BOOTSTRAP_CONFIDENCE,
+) -> BootstrapInterval:
+    """Cliff's delta(a, b) with an unpaired BCa interval (ADR-020 A6; ADR-032, S3)."""
+    first = np.asarray(_values(a), dtype=np.float64)
+    second = np.asarray(_values(b), dtype=np.float64)
+    if first.size < 2 or second.size < 2:
+        raise ValueError("the bootstrap needs at least two values per sample")
+    return _bca(
+        (first, second),
+        _cliffs_delta_ranks,
+        float(cliffs_delta(first, second)),
+        _check_generator(rng),
+        resamples,
+        confidence,
+    )
