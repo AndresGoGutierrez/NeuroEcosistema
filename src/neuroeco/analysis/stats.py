@@ -10,9 +10,11 @@ with a common denominator, so zeros and ties are detected exactly.
 
 from __future__ import annotations
 
+import itertools
 import statistics
 from collections.abc import Callable, Hashable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
+from enum import StrEnum
 from fractions import Fraction
 from functools import cache
 from math import comb
@@ -442,3 +444,90 @@ def cliffs_delta(a: Sequence[float], b: Sequence[float]) -> Fraction:
     first, second = np.asarray(_values(a)), np.asarray(_values(b))
     signs = np.sign(first[:, np.newaxis] - second[np.newaxis, :])
     return Fraction(int(signs.sum()), first.size * second.size)
+
+
+# ---------------------------------------------------------------- C2 decision rules (ADR-013)
+
+
+class NonInferiority(StrEnum):
+    SUPERIOR = "superior"
+    NON_INFERIOR = "non_inferior"
+    INFERIOR = "inferior"
+    INCONCLUSIVE = "inconclusive"
+
+
+def classify_noninferiority(lower: float, upper: float, margin: float) -> NonInferiority:
+    """ADR-013 rule on the interval [L, U] of delta = compact - base with margin Delta > 0.
+
+    In this order, with strict inequalities (ADR-032): L > 0 superior; L > -Delta non-inferior;
+    U < -Delta inferior; otherwise inconclusive.
+    """
+    if not margin > 0:
+        raise ValueError(f"the non-inferiority margin must be > 0, got {margin}")
+    if lower > upper:
+        raise ValueError(f"invalid interval [{lower}, {upper}]")
+    if lower > 0:
+        return NonInferiority.SUPERIOR
+    if lower > -margin:
+        return NonInferiority.NON_INFERIOR
+    if upper < -margin:
+        return NonInferiority.INFERIOR
+    return NonInferiority.INCONCLUSIVE
+
+
+def iqr(values: Sequence[float]) -> float:
+    """Interquartile range with NumPy linear quantiles (Hyndman-Fan type 7, ADR-032)."""
+    q1, q3 = np.quantile(np.asarray(_values(values), dtype=np.float64), [0.25, 0.75])
+    return float(q3 - q1)
+
+
+SHIFT_MODEL_IQR_RATIO = 2
+
+
+def shift_model_warning(a: Sequence[float], b: Sequence[float]) -> bool:
+    """True when the IQRs of the two arms differ by more than a factor of 2 (ADR-013).
+
+    Non-inferiority is then reported "conditional on the shift model". One IQR zero and the
+    other not: warning; both zero: no warning (ADR-032).
+    """
+    small, large = sorted((iqr(a), iqr(b)))
+    if large == 0:
+        return False
+    if small == 0:
+        return True
+    return large / small > SHIFT_MODEL_IQR_RATIO
+
+
+EFFICIENCY_FRACTION = Fraction(9, 10)
+
+
+def efficiency_threshold(f0: float, f_base: float) -> float:
+    """theta = F0 + 0.9 (F_base - F0) (ADR-013)."""
+    return f0 + float(EFFICIENCY_FRACTION) * (f_base - f0)
+
+
+@dataclass(frozen=True)
+class GenerationsToThreshold:
+    generation: int  # first evaluated generation with F_val >= theta, or G + k_val
+    censored: bool
+
+
+def generations_to_threshold(
+    generations: Sequence[int],
+    validation: Sequence[float],
+    theta: float,
+    total_generations: int,
+    k_val: int,
+) -> GenerationsToThreshold:
+    """G_theta of one run: first evaluated generation reaching theta; censored at G + k_val."""
+    if len(generations) != len(validation) or not generations:
+        raise ValueError("generations and validation values must be non-empty and aligned")
+    if any(b <= a for a, b in itertools.pairwise(generations)) or generations[0] < 0:
+        raise ValueError("evaluated generations must be non-negative and strictly increasing")
+    if generations[-1] > total_generations or k_val < 1:
+        raise ValueError("generations must not exceed G, and k_val must be >= 1")
+    values = _values(validation)
+    for generation, value in zip(generations, values, strict=True):
+        if value >= theta:
+            return GenerationsToThreshold(int(generation), censored=False)
+    return GenerationsToThreshold(total_generations + k_val, censored=True)
