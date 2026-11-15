@@ -16,12 +16,13 @@ bootstrap (composition root) ──instancia──► infrastructure
         │                                   (config_loader, storage, executors,
         ▼                                    runtime_env, provenance)
 application (ports, configs, seeding, metrics,          │ implementa los puertos
-             training, evaluation, session) ◄───────────┘
+             training, evaluation, session,             │
+             calibration) ◄─────────────────────────────┘
         │
         ▼
 domain  [solo biblioteca estándar + numpy]
 
-analysis (stats, report) ── solo lee ──► results/*.csv
+analysis (stats, calibration, report) ── solo lee ──► results/*.csv
 ```
 
 | Capa | Puede importar | Responsabilidad |
@@ -75,13 +76,17 @@ src/neuroeco/
   bootstrap.py  composition root (F1)
   domain/       params, geometry, state, rules, interactions, perception, actions,
                 policies, neural, evolution, fitness, simulator, records
-  application/  ports, configs, seeding, metrics, training, evaluation, session
+  application/  ports, configs, seeding, metrics, training, evaluation, session, calibration
   infrastructure/ config_loader, storage, executors, runtime_env, provenance
-  analysis/     stats, report
+  analysis/     stats, calibration, report
   presentation/ cli, viewer, inspector
 ```
 
-Los módulos se crean en la fase que los necesita (ADR-024).
+Los módulos se crean en la fase que los necesita (ADR-024). Los dos módulos `calibration` son de
+F4 ([ADR-033](decisions/ADR-033-p1-operational-definitions.md), P1-10):
+`application/calibration.py` ejecuta los bloques de P1 y comprueba las invariantes A2 como
+observador de solo lectura; `analysis/calibration.py` evalúa los criterios de ADR-020 a partir de
+los CSV, sin importar el núcleo (reconstruye las semillas del bootstrap con NumPy, P1-20).
 
 ## Interfaces principales
 

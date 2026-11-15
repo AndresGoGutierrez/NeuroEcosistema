@@ -289,9 +289,9 @@ local, más que los ≈ 80 s estimados en ADR-032; no cambia ningún parámetro 
 
 ## F4: P1, calibración ecológica
 
-- **Inicio:** 2026-11-15, con autorización expresa del autor limitada a T0.
-- **Estado:** 🔄 En curso. T0 (documentación) en revisión; T1 y la ejecución de episodios no
-  están autorizadas.
+- **Inicio:** 2026-11-15, con autorización expresa del autor limitada a T0; después, T0b.
+- **Estado:** 🔄 En curso. T0 y T0b (documentación) completadas; T0b pendiente de la revisión
+  final del autor. T1 y la ejecución de episodios no están autorizadas.
 - **Criterio de cierre (ADR-024):** criterios de ADR-020 (clase A completa en la confirmación;
   cada B cumplido o aceptado mediante ADR; cada C investigado y documentado), `p_flee` y
   `u_cruise` ajustados y congelados (ADR-012) y etiqueta `env-frozen-v1`.
@@ -300,7 +300,8 @@ local, más que los ≈ 80 s estimados en ADR-032; no cambia ningún parámetro 
 - **Restricciones:** sin redes en P1; sin cambios en el comportamiento del núcleo de F1, en las
   métricas ni en el esquema de semillas; sin dependencias nuevas ni cambios en `uv.lock`; sin
   modificar ADR aprobados; semillas, tamaños, tolerancias y umbrales fijados antes de ver datos;
-  ningún episodio descartado; única excepción en código cerrado: la prueba de P1-2.
+  ningún episodio descartado; única excepción en código cerrado: la prueba de P1-2 (cualquier
+  otra prueba cerrada que falle al congelar obliga a detenerse y consultar, P1-23).
 
 **Decisiones (detalle en [ADR-033](decisions/ADR-033-p1-operational-definitions.md)):**
 
@@ -318,18 +319,41 @@ local, más que los ≈ 80 s estimados en ADR-032; no cambia ningún parámetro 
 | P1-10 | `application/calibration.py` y `analysis/calibration.py` | Aprobada |
 | P1-11 | Valores congelados en un ADR nuevo | Aprobada |
 | P1-12 | `env-frozen-v1` solo al final y con autorización expresa | Aprobada |
-| P1-13 | `seed_group` 10–12 (calibración), 20–22 (confirmación), 30–32 (segunda confirmación) | Pendiente de revisión |
-| P1-14 | 35 condiciones por bloque (reglas, aleatorias, 8 sondas, sin depredadores) | Pendiente de revisión |
-| P1-15 | Criterios sin escenario nombrado: en cada escenario; A3 con las dos métricas primarias | Pendiente de revisión |
-| P1-16 | Fórmula exacta de cada criterio A, B y C | Pendiente de revisión |
-| P1-17 | Rejilla por especie, rondas (como máximo 3) y orden de desempate | Pendiente de revisión |
-| P1-18 | Iteraciones de un solo parámetro, límite por etapa y escenarios por etapa | Pendiente de revisión |
-| P1-19 | Registro previo de cada iteración en un commit antes de ejecutarla | Pendiente de revisión |
-| P1-20 | Composición de las claves del bootstrap | Pendiente de revisión |
-| P1-21 | Condiciones de entrada a la confirmación | Pendiente de revisión |
-| P1-22 | Comprobaciones del observador A2 | Pendiente de revisión |
+| P1-13 | `seed_group` 10–12 (calibración), 20–22 (confirmación), 30–32 (segunda confirmación); claves completas en cada fila; pruebas con grupos ≥ 1000; confirmación protegida por una opción explícita | Aprobada (T0b, D16) |
+| P1-14 | 35 condiciones por bloque (reglas, aleatorias, 8 sondas, sin depredadores) | Aprobada (T0b) |
+| P1-15 | Criterios sin escenario nombrado: en cada escenario; A3 con las dos métricas primarias | Aprobada (T0b, D5) |
+| P1-16 | Fórmula exacta de cada criterio A, B y C; reglas de agregación; A4 b1 y b2; A6 con IC degenerado; B3 con censura; B5 literal; B6 con `steps` = t_max | Aprobada (T0b, D1–D4, D6, D12, D14) |
+| P1-17 | Rejilla por especie, objetivos y orden de desempate | Aprobada (T0b) |
+| P1-18 | Máquina de estados (lectura L1): iteraciones de un parámetro, ≤ 5 por etapa, ≤ 3 rondas, ≤ 3 alternancias, sin retorno desde B o C | Aprobada (T0b, D7–D10) |
+| P1-19 | Registro previo de cada iteración, publicado antes de ejecutarla; código de evaluación congelado | Aprobada (T0b) |
+| P1-20 | Claves del bootstrap; evaluación de entrada con `run = 0`; claves ANALYSIS 10, 20 y 30 reservadas | Aprobada (T0b, D15) |
+| P1-21 | Confirmación con autorización expresa; repetición solo por fallo de infraestructura | Aprobada (T0b, D11, D18) |
+| P1-22 | Comprobador A2 con S₀ reconstruido (V7) y prueba de hashes por paso | Aprobada (T0b) |
+| P1-23 | Pruebas cerradas que fallen al congelar: detenerse y consultar | Aprobada (T0b, D13) |
+| P1-24 | `run` y `view` solo con el grupo 0; observaciones citadas en el registro previo | Aprobada (T0b, D17) |
 
-**Tareas previstas:** T0 documentación · T1 especificación y cargador de P1 · T2 comprobador A2 y
-ejecución por bloques · T3 comando `pilot p1` · T4 evaluación de criterios desde CSV ·
-T5… iteraciones de calibración · confirmación · congelamiento (P1-2, ADR de valores, etiqueta) ·
-cierre.
+**Procedimiento de calibración** (máquina de estados de ADR-033, P1-18):
+K → A_eval ⇄ A_ajuste → T (rondas) ⇄ A_rev → T_fin → B_eval → C_eval → E → AUT → CONF.
+No se vuelve de B o C a A; agotar un presupuesto detiene F4 y obliga a consultar al autor.
+
+**Tareas previstas:** T0 documentación · T0b corrección de ADR-033 tras la auditoría · T1
+especificación y cargador de P1 · T2 comprobador A2 y ejecución por bloques · T3 comando
+`pilot p1` · T4 evaluación de criterios desde CSV · T5… iteraciones de calibración · confirmación
+(con autorización expresa) · congelamiento (P1-2, ADR de valores, etiqueta) · cierre.
+
+**Commits:**
+
+| Tarea | Commit | CI (Ubuntu y Windows) |
+|---|---|---|
+| T0 ADR-033 (P1-1 a P1-22), plan y estado | `deb2ac4` | `43771573602` ✅ |
+
+**Incidencias durante F4:**
+
+- La auditoría metodológica pedida por el autor tras T0, antes de cualquier dato, encontró tres
+  errores en las propuestas: A6 habría fallado con separación completa (el BCa no es estimable
+  cuando δ̂ = −1, comprobado con datos sintéticos); B3 se habría aprobado artificialmente, porque
+  la métrica de F1 `predator_survival` cuenta como supervivientes a los depredadores vivos en un
+  final anticipado; y B6 confundía "vivo al final" con "vivo en T_max". También detectó una
+  justificación errónea para limitar A4 (b) a la presa, una redefinición no autorizada de B5 y
+  tres lecturas posibles de la alternancia. Todo se corrigió en T0b con las decisiones D1–D18 del
+  autor.
