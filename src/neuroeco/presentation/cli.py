@@ -132,6 +132,9 @@ def pilot_p0(
         config = runtime.config
         prey_policy = build_policy(spec.prey_policy, "prey", config)
         predator_policy = build_policy(spec.predator_policy, "predator", config)
+        # Provenance is captured BEFORE any output exists, so `git_dirty` describes the code
+        # that is measured, not the result files this command is about to write.
+        provenance = collect_provenance(sys.argv, Path.cwd(), config.config_hash)
         clock = time.perf_counter
 
         def identity(item: int) -> EpisodeIdentity:
@@ -221,7 +224,7 @@ def pilot_p0(
     write_json(
         output_dir / "p0_provenance.json",
         {
-            **collect_provenance(sys.argv, Path.cwd(), config.config_hash),
+            **provenance,
             "spec": dataclasses.asdict(spec),
             "world_overrides": list(overrides or ()),
             "reference": {"n_prey": spec.reference_prey, "n_predators": spec.reference_predators},

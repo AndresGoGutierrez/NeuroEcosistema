@@ -96,3 +96,35 @@ def test_p0_command_writes_evidence(tmp_path) -> None:
     assert provenance["world_overrides"] == ["world.t_max=20"]
     for key in ("git_commit", "python", "numpy", "platform", "cpu_count", "config_hash"):
         assert key in provenance
+
+
+def test_p0_provenance_is_captured_before_any_output(tmp_path, monkeypatch) -> None:
+    import neuroeco.presentation.cli as cli
+
+    seen: dict[str, bool] = {}
+    original = cli.collect_provenance
+
+    def spy(*args, **kwargs):
+        seen["outputs_existed"] = any(tmp_path.iterdir())
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(cli, "collect_provenance", spy)
+    result = CliRunner().invoke(
+        app,
+        [
+            "pilot",
+            "p0",
+            "--spec",
+            str(SPEC),
+            "--config-dir",
+            str(CONFIGS),
+            "--output-dir",
+            str(tmp_path),
+            "--repetitions",
+            "1",
+            "--set",
+            "world.t_max=5",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert seen == {"outputs_existed": False}
