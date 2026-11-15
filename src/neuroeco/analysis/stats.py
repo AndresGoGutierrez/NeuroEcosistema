@@ -238,3 +238,115 @@ def holm(p_values: Sequence[Fraction | int], m: int | None = None) -> tuple[Frac
         running = max(running, min(Fraction(1), (family - rank) * Fraction(p_values[index])))
         adjusted[index] = running
     return tuple(adjusted)
+
+
+# ---------------------------------------------------------------- one-sample sensitivity (ADR-017)
+
+MAX_ONE_SAMPLE = 12  # exact one-sample enumerations (ADR-032)
+
+
+def _check_one_sample_size(n: int) -> None:
+    if n > MAX_ONE_SAMPLE:
+        raise ValueError(f"exact one-sample methods are limited to n <= {MAX_ONE_SAMPLE}, got {n}")
+
+
+def midranks_doubled(values: Sequence[float]) -> list[int]:
+    """Twice the mid-ranks (ascending) of ``values``: integers even with ties."""
+    order = sorted(range(len(values)), key=lambda i: values[i])
+    doubled = [0] * len(values)
+    start = 0
+    while start < len(order):
+        end = start
+        while end + 1 < len(order) and values[order[end + 1]] == values[order[start]]:
+            end += 1
+        for position in range(start, end + 1):
+            doubled[order[position]] = start + end + 2  # 2 * mean of ranks start+1 .. end+1
+        start = end + 1
+    return doubled
+
+
+def _subset_sum_counts(weights: Sequence[int]) -> dict[int, int]:
+    """Number of subsets of ``weights`` with each possible sum (all 2^n sign assignments)."""
+    counts = {0: 1}
+    for weight in weights:
+        updated = dict(counts)
+        for total, ways in counts.items():
+            updated[total + weight] = updated.get(total + weight, 0) + ways
+        counts = updated
+    return counts
+
+
+@dataclass(frozen=True)
+class WilcoxonSignedRank:
+    n_used: int  # non-zero differences
+    zeros: int  # excluded (Wilcox)
+    statistic: Fraction  # T+ = sum of mid-ranks of the positive differences
+    p_value: Fraction  # two-sided exact permutation p
+
+
+def wilcoxon_signed_rank(differences: Sequence[float]) -> WilcoxonSignedRank:
+    """Exact Wilcoxon signed-rank test by enumeration of the 2^n sign assignments.
+
+    Zeros are excluded (Wilcox); tied |d| get mid-ranks, handled as doubled integers. Two-sided
+    p = P(|T - E[T]| >= |t_obs - E[T]|) under equiprobable signs (ADR-032).
+    """
+    data = _values(differences)
+    nonzero = [d for d in data if d != 0]
+    n = len(nonzero)
+    _check_one_sample_size(n)
+    if n == 0:
+        return WilcoxonSignedRank(0, len(data), Fraction(0), Fraction(1))
+    ranks = midranks_doubled([abs(d) for d in nonzero])
+    total = sum(ranks)
+    observed = sum(r for r, d in zip(ranks, nonzero, strict=True) if d > 0)
+    distance = abs(2 * observed - total)
+    extreme = sum(
+        ways for s, ways in _subset_sum_counts(ranks).items() if abs(2 * s - total) >= distance
+    )
+    return WilcoxonSignedRank(
+        n_used=n,
+        zeros=len(data) - n,
+        statistic=Fraction(observed, 2),
+        p_value=Fraction(extreme, 2**n),
+    )
+
+
+@cache
+def signed_rank_null_cdf(n: int, t: int) -> Fraction:
+    """P(T+ <= t) for the signed-rank statistic of n untied, non-zero values."""
+    if t < 0:
+        return Fraction(0)
+    counts = _subset_sum_counts(range(1, n + 1))
+    return Fraction(sum(ways for s, ways in counts.items() if s <= t), 2**n)
+
+
+def walsh_averages(data: Sequence[float]) -> list[float]:
+    """Sorted (x_i + x_j) / 2 for i <= j: n(n+1)/2 values."""
+    values = _values(data)
+    return sorted(
+        (values[i] + values[j]) / 2 for i in range(len(values)) for j in range(i, len(values))
+    )
+
+
+@dataclass(frozen=True)
+class HodgesLehmannOneSample:
+    estimate: float  # median of the Walsh averages (pseudo-median)
+    interval: OrderInterval  # [W_(k), W_(M-k+1)] by inversion of the Wilcoxon test
+
+
+def hodges_lehmann_one_sample(
+    data: Sequence[float], confidence: Fraction = CONFIDENCE
+) -> HodgesLehmannOneSample:
+    """One-sample Hodges-Lehmann estimate with the exact Wilcoxon-inversion interval.
+
+    Assumes a continuous symmetric distribution (ADR-017 sensitivity); k comes from the exact
+    null distribution of T+ without ties (ADR-032).
+    """
+    n = len(_values(data))
+    _check_one_sample_size(n)
+    walsh = walsh_averages(data)
+    k, level = _largest_k(len(walsh), lambda j: signed_rank_null_cdf(n, j), confidence)
+    return HodgesLehmannOneSample(
+        estimate=statistics.median(walsh),
+        interval=OrderInterval(walsh[k - 1], walsh[len(walsh) - k], k, level),
+    )
