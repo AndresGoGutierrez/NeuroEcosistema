@@ -8,6 +8,8 @@ decisión se registra como un ADR (*Architecture Decision Record*) con la planti
 - ADR-001 a ADR-024 corresponden uno a uno a las decisiones D1–D24 aprobadas al cerrar el diseño
   (2026-11-15).
 - ADR-025 a ADR-030 registran decisiones del diseño consolidado que no tenían número D.
+- ADR-031 en adelante registran decisiones tomadas durante la implementación, con aprobación
+  del autor.
 - Las decisiones de los ejes **Interpretación** y **Mejora** se añadirán con los resultados (F9).
 - La evidencia de muchos ADR es todavía analítica; cada uno indica qué evidencia empírica falta
   y en qué fase se obtiene.
@@ -78,3 +80,4 @@ decisión se registra como un ADR (*Architecture Decision Record*) con la planti
 | [022](ADR-022-stdlib-dataclasses-config.md) | Configuración con dataclasses |
 | [023](ADR-023-csv-results.md) | Resultados en CSV |
 | [024](ADR-024-phase-plan-and-gates.md) | Plan de fases y cierres |
+| [031](ADR-031-viewer-integration.md) | Integración del visor y registro de la sesión |

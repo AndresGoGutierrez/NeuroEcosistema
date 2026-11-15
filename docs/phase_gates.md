@@ -112,3 +112,43 @@ DET-5 · T13 punto de entrada y CLI `run` · T14 P0 · T15 cierre.
 
 **Pendiente para fases posteriores:** O1 y O4 antes de P0b (F6); la fecha de entrega y las horas
 de cómputo disponibles, necesarias para P3 (F6).
+
+## F2: Visualización
+
+- **Inicio:** 2026-11-15, con autorización expresa del autor tras revisar el plan.
+- **Estado:** en curso.
+- **Fuera del alcance:** estadística (F3), activaciones en el inspector y política neuronal
+  (F5), `RunStore` y manifest de ejecuciones formales (F6), figuras (F3, F8).
+- **Restricciones:** sin cambios en el comportamiento del simulador de F1, en `domain`, en
+  `application/evaluation` ni en las métricas; sin dependencias nuevas; DET-1…DET-6 intactos.
+
+**Decisiones aprobadas (detalle en [ADR-031](decisions/ADR-031-viewer-integration.md)):**
+
+| ID | Decisión |
+|---|---|
+| V1 | El visor es un observador síncrono sobre `on_step`; recibe copias de solo lectura |
+| V2 | Registro JSON por sesión en `runs/view/<fecha-hora UTC>-<id>/session.json`, fuera de git, escrito antes de empezar y completado al terminar, también si se interrumpe |
+| V3 | `--set` se registra en `view`; `run` no cambia |
+| V4 | Variables del inspector según ADR-031; activaciones en F5 |
+| V5 | Contenido del HUD según ADR-031 |
+| V6 | Controles: pausa, avance de un paso, velocidad, selección por clic y salida con Esc; sin cambios de parámetros durante la sesión |
+| V7 | S₀ se reconstruye con flujos independientes de la misma identidad de semillas |
+| V8 | Contrato de import-linter: pygame solo en `presentation` |
+| V9 | Las capturas de comprobación no se versionan |
+
+**Tareas:** T0 documentación · T1 datos de sesión · T2 inspector y selección · T3 visor ·
+T4 registro de la sesión · T5 comando `view` · T6 verificación visual · T7 cierre.
+
+| Criterio de cierre (ADR-024 y condiciones del autor) | Estado |
+|---|---|
+| Hash con visor = hash sin visor, por paso | ⏳ |
+| Dibujar no modifica el estado | ⏳ |
+| Pausar y avanzar pasos no alteran la trayectoria | ⏳ |
+| Seleccionar agentes no interfiere con la simulación | ⏳ |
+| Las políticas aleatorias conservan exactamente sus resultados | ⏳ |
+| `view` y `run` producen los mismos hashes y métricas con la misma configuración | ⏳ |
+| Inspector = traza, respetando S_t (observaciones) y S_t+1 (estado tras el paso) | ⏳ |
+| `--set` registrado: sobrescrituras literales, hash de configuración, semillas y procedencia | ⏳ |
+| Una sesión cerrada anticipadamente queda registrada | ⏳ |
+| Las 209 pruebas de F1 siguen pasando; visor comprobado con el driver `dummy` en Ubuntu y Windows | ⏳ |
+| Verificación visual manual del autor | ⏳ |

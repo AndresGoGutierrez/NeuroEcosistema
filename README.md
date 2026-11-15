@@ -15,8 +15,10 @@ del proyecto y no se incluye en este repositorio. Las secciones de la propuesta 
 
 | Fase | Contenido | Estado |
 |---|---|---|
-| F0 | Fundaciones: repositorio, entorno, contratos de arquitectura, decisiones (ADR) | En cierre |
-| F1–F9 | Simulador, visualización, estadística, calibración, redes, neuroevolución, protocolo, experimentos, entregables | Pendientes |
+| F0 | Fundaciones: repositorio, entorno, contratos de arquitectura, decisiones (ADR) | Cerrada |
+| F1 | Núcleo de simulación y piloto P0 | Cerrada (P0 con plan de optimización) |
+| F2 | Visualización: visor, HUD, inspector y registro de `--set` | En curso |
+| F3–F9 | Estadística, calibración, redes, neuroevolución, protocolo, experimentos, entregables | Pendientes |
 
 El plan completo y los criterios de cierre de cada fase están en
 [docs/decisions/ADR-024-phase-plan-and-gates.md](docs/decisions/ADR-024-phase-plan-and-gates.md)

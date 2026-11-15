@@ -44,6 +44,7 @@ los pilotos formales declaran su propio `seed_group` (ADR-028).
 |---|---|
 | `lint-imports`, contrato *layers* | `launcher → presentation → bootstrap → infrastructure → application → domain`, sin dependencias hacia arriba |
 | `lint-imports`, contrato *forbidden* | `domain` y `application` no importan `yaml`, `pandas`, `scipy`, `matplotlib`, `pygame`, `typer` ni `threadpoolctl` |
+| `lint-imports`, contrato *forbidden* | `pygame` solo se usa en `presentation`: no lo importan `bootstrap`, `infrastructure`, `application`, `domain` ni `analysis` (ADR-031) |
 | `lint-imports`, contrato *forbidden* | `analysis` no importa `domain`, `application`, `infrastructure` ni `presentation` |
 | `tests/architecture/test_layer_imports.py` | Lista blanca estricta: cualquier importación de `domain` o `application` que no sea stdlib, `numpy` o un paquete interno permitido hace fallar la prueba (incluye importaciones relativas) |
 | `ruff` (TID251, NPY002) | Prohíbe el módulo `random` y la API global heredada `np.random.*` en todo el código |
@@ -102,5 +103,7 @@ implementaciones; el resto son clases y funciones concretas (ADR-021).
 2. **Experimento:** condiciones × escenarios × semillas de prueba → CSV en `results/` →
    `analysis` genera tablas, figuras, intervalos y pruebas.
 3. **Demostración:** visor con HUD e inspector de entradas, activaciones y acciones; los
-   cambios de parámetros se hacen al lanzar (`--set`) y quedan registrados.
+   cambios de parámetros se hacen al lanzar (`--set`) y quedan registrados. El visor es un
+   observador síncrono del simulador que solo recibe copias de solo lectura (ADR-031); las
+   activaciones se añaden en F5.
 4. **Reproducción:** `uv sync --frozen` → pruebas → entrenamientos → experimentos → análisis.

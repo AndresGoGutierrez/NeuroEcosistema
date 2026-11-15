@@ -93,6 +93,18 @@ source_modules = ["neuroeco.domain", "neuroeco.application"]
 forbidden_modules = ["yaml", "pandas", "scipy", "matplotlib", "pygame", "typer", "threadpoolctl"]
 
 [[tool.importlinter.contracts]]
+name = "pygame is used only by the presentation layer (ADR-031)"
+type = "forbidden"
+source_modules = [
+    "neuroeco.bootstrap",
+    "neuroeco.infrastructure",
+    "neuroeco.application",
+    "neuroeco.domain",
+    "neuroeco.analysis",
+]
+forbidden_modules = ["pygame"]
+
+[[tool.importlinter.contracts]]
 name = "Analysis only reads result files"
 type = "forbidden"
 source_modules = ["neuroeco.analysis"]
