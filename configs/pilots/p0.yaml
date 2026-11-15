@@ -1,0 +1,13 @@
+# Pilot P0: simulation cost per step, single process (decisions A3 and A4, docs/phase_gates.md).
+# The network forward pass and parallel speed-up are measured later in P0b (F6).
+pilot: P0
+seed_group: 1             # ADR-028; seed_group 0 is reserved for exploratory `neuroeco run`
+scenario: A               # 40 plants; the grid overrides n_prey and n_predators
+prey_counts: [10, 25, 50]
+predator_counts: [3, 8]
+repetitions: 5            # independent episodes; c_step = median of their mean time per step
+reference_prey: 50        # stress reference for the threshold (decision A4)
+reference_predators: 8
+threshold_us: 500.0
+prey_policy: rules
+predator_policy: rules

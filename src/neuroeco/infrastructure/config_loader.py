@@ -19,7 +19,7 @@ from typing import Any
 
 import yaml
 
-from neuroeco.application.configs import ResolvedConfig, RuleParams
+from neuroeco.application.configs import P0Spec, ResolvedConfig, RuleParams
 from neuroeco.domain.params import WorldParams
 
 BASE_FILE = "base.yaml"
@@ -40,6 +40,13 @@ def read_yaml(path: Path) -> dict[str, Any]:
 
 
 def _convert(value: Any, hint: Any, where: str) -> Any:
+    if typing.get_origin(hint) is tuple:
+        item_hint, ellipsis = (*typing.get_args(hint), None)[:2]
+        if ellipsis is not Ellipsis:
+            raise ConfigError(f"{where}: only homogeneous tuples (tuple[T, ...]) are supported")
+        if not isinstance(value, list | tuple):
+            raise ConfigError(f"{where}: expected a list")
+        return tuple(_convert(item, item_hint, f"{where}[{i}]") for i, item in enumerate(value))
     if dataclasses.is_dataclass(hint):
         if not isinstance(value, Mapping):
             raise ConfigError(f"{where}: expected a mapping")
@@ -141,6 +148,10 @@ def load_config(config_dir: Path, scenario: str, overrides: Sequence[str] = ()) 
         rules=build_dataclass(RuleParams, tree["rules"], "rules"),
         config_hash=config_hash(tree),
     )
+
+
+def load_p0_spec(path: Path) -> P0Spec:
+    return build_dataclass(P0Spec, read_yaml(path), path.stem)
 
 
 def check_unique_seed_groups(declared: Mapping[str, int]) -> None:

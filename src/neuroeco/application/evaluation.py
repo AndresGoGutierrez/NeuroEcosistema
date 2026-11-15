@@ -45,3 +45,33 @@ def run_episode(
     )
     record = simulate_episode(params, prey_policy, predator_policy, streams, on_step, timer)
     return EpisodeResult(identity=identity, record=record, metrics=episode_metrics(record))
+
+
+@dataclass(frozen=True)
+class TimedEpisode:
+    """Wall-clock cost of one episode (P0). Timing is kept out of the episode record."""
+
+    identity: EpisodeIdentity
+    steps: int
+    total_seconds: float
+    phase_seconds: dict[str, float]
+
+    @property
+    def seconds_per_step(self) -> float:
+        return self.total_seconds / self.steps
+
+
+def time_episode(
+    params: WorldParams,
+    prey_policy: Policy,
+    predator_policy: Policy,
+    registry: SeedRegistry,
+    identity: EpisodeIdentity,
+    clock: Callable[[], float],
+) -> TimedEpisode:
+    """Run one episode measuring total and per-phase time with the injected clock."""
+    timer = PhaseTimer(clock=clock)
+    start = clock()
+    result = run_episode(params, prey_policy, predator_policy, registry, identity, timer=timer)
+    total = clock() - start
+    return TimedEpisode(identity, result.metrics.steps, total, dict(timer.totals))

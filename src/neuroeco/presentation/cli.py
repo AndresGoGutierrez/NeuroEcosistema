@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+import dataclasses
+import statistics
+import sys
+import time
 from pathlib import Path
 from typing import Annotated
 
 import typer
 
-from neuroeco.application.evaluation import EpisodeIdentity, run_episode
+from neuroeco.application.evaluation import EpisodeIdentity, run_episode, time_episode
 from neuroeco.application.seeding import Purpose
 from neuroeco.bootstrap import (
     DEFAULT_CONFIG_DIR,
@@ -17,10 +21,17 @@ from neuroeco.bootstrap import (
     build_runtime,
 )
 from neuroeco.domain.params import ConfigurationError
+from neuroeco.domain.simulator import PHASES
 from neuroeco.domain.state import InitializationError
-from neuroeco.infrastructure.config_loader import ConfigError
+from neuroeco.infrastructure.config_loader import ConfigError, load_p0_spec
+from neuroeco.infrastructure.provenance import collect_provenance
+from neuroeco.infrastructure.storage import write_csv, write_json
 
 app = typer.Typer(no_args_is_help=True, help="NeuroEcosistema command-line interface.")
+pilot_app = typer.Typer(no_args_is_help=True, help="Pilot studies.")
+app.add_typer(pilot_app, name="pilot")
+
+USER_ERRORS = (ConfigError, ConfigurationError, InitializationError, ValueError)
 
 
 @app.callback()
@@ -55,7 +66,7 @@ def run(
             runtime.registry,
             identity,
         )
-    except (ConfigError, ConfigurationError, InitializationError, ValueError) as error:
+    except USER_ERRORS as error:
         typer.echo(f"error: {error}", err=True)
         raise typer.Exit(code=1) from error
 
@@ -73,3 +84,162 @@ def run(
         f"predators alive     {m.predators_alive_end} / {config.world.n_predators}",
     ]
     typer.echo("\n".join(lines))
+
+
+P0_EPISODE_COLUMNS = (
+    "n_prey",
+    "n_predators",
+    "n_plants",
+    "repetition",
+    "seed_item",
+    "steps",
+    "seconds",
+    "us_per_step",
+    *(f"{phase}_us_per_step" for phase in PHASES),
+)
+P0_SUMMARY_COLUMNS = (
+    "n_prey",
+    "n_predators",
+    "repetitions",
+    "median_us_per_step",
+    "min_us_per_step",
+    "max_us_per_step",
+    *(f"median_{phase}_us_per_step" for phase in PHASES),
+)
+WARMUP_STEPS = 50
+
+
+@pilot_app.command("p0")
+def pilot_p0(
+    spec_path: Annotated[Path, typer.Option("--spec", help="P0 specification.")] = (
+        DEFAULT_CONFIG_DIR / "pilots" / "p0.yaml"
+    ),
+    config_dir: Annotated[Path, typer.Option(help="Configuration directory.")] = (
+        DEFAULT_CONFIG_DIR
+    ),
+    output_dir: Annotated[Path, typer.Option(help="Output directory.")] = Path("results/pilots/p0"),
+    repetitions: Annotated[
+        int | None, typer.Option(min=1, help="Override the number of repetitions.")
+    ] = None,
+    overrides: Annotated[list[str] | None, typer.Option("--set", help="World override.")] = None,
+) -> None:
+    """Pilot P0: simulation cost per step over the (n_prey x n_predators) grid."""
+    try:
+        spec = load_p0_spec(spec_path)
+        if repetitions is not None:
+            spec = dataclasses.replace(spec, repetitions=repetitions)
+        runtime = build_runtime(spec.scenario, overrides or (), config_dir)
+        config = runtime.config
+        prey_policy = build_policy(spec.prey_policy, "prey", config)
+        predator_policy = build_policy(spec.predator_policy, "predator", config)
+        clock = time.perf_counter
+
+        def identity(item: int) -> EpisodeIdentity:
+            return EpisodeIdentity(Purpose.PILOT, spec.seed_group, item=item)
+
+        warmup = dataclasses.replace(
+            config.world,
+            n_prey=spec.reference_prey,
+            n_predators=spec.reference_predators,
+            t_max=min(WARMUP_STEPS, config.world.t_max),
+        )  # not recorded; uses an item outside the measured range
+        time_episode(
+            warmup,
+            prey_policy,
+            predator_policy,
+            runtime.registry,
+            identity(spec.repetitions),
+            clock,
+        )
+
+        episodes: list[dict[str, object]] = []
+        summary: list[dict[str, object]] = []
+        for n_prey in spec.prey_counts:
+            for n_predators in spec.predator_counts:
+                params = dataclasses.replace(config.world, n_prey=n_prey, n_predators=n_predators)
+                cell: list[dict[str, float]] = []
+                for repetition in range(spec.repetitions):
+                    timed = time_episode(
+                        params,
+                        prey_policy,
+                        predator_policy,
+                        runtime.registry,
+                        identity(repetition),
+                        clock,
+                    )
+                    row = {
+                        "us_per_step": 1e6 * timed.seconds_per_step,
+                        **{
+                            f"{phase}_us_per_step": 1e6 * timed.phase_seconds[phase] / timed.steps
+                            for phase in PHASES
+                        },
+                    }
+                    cell.append(row)
+                    episodes.append(
+                        {
+                            "n_prey": n_prey,
+                            "n_predators": n_predators,
+                            "n_plants": params.n_plants,
+                            "repetition": repetition,
+                            "seed_item": repetition,
+                            "steps": timed.steps,
+                            "seconds": f"{timed.total_seconds:.6f}",
+                            **{key: f"{value:.3f}" for key, value in row.items()},
+                        }
+                    )
+                per_step = [row["us_per_step"] for row in cell]
+                summary.append(
+                    {
+                        "n_prey": n_prey,
+                        "n_predators": n_predators,
+                        "repetitions": spec.repetitions,
+                        "median_us_per_step": f"{statistics.median(per_step):.3f}",
+                        "min_us_per_step": f"{min(per_step):.3f}",
+                        "max_us_per_step": f"{max(per_step):.3f}",
+                        **{
+                            f"median_{phase}_us_per_step": (
+                                f"{statistics.median(r[f'{phase}_us_per_step'] for r in cell):.3f}"
+                            )
+                            for phase in PHASES
+                        },
+                    }
+                )
+    except USER_ERRORS as error:
+        typer.echo(f"error: {error}", err=True)
+        raise typer.Exit(code=1) from error
+
+    reference = next(
+        row
+        for row in summary
+        if row["n_prey"] == spec.reference_prey and row["n_predators"] == spec.reference_predators
+    )
+    c_step = float(reference["median_us_per_step"])
+    verdict = "PASS" if c_step <= spec.threshold_us else "FAIL"
+
+    write_csv(output_dir / "p0_episodes.csv", P0_EPISODE_COLUMNS, episodes)
+    write_csv(output_dir / "p0_summary.csv", P0_SUMMARY_COLUMNS, summary)
+    write_json(
+        output_dir / "p0_provenance.json",
+        {
+            **collect_provenance(sys.argv, Path.cwd(), config.config_hash),
+            "spec": dataclasses.asdict(spec),
+            "world_overrides": list(overrides or ()),
+            "reference": {"n_prey": spec.reference_prey, "n_predators": spec.reference_predators},
+            "reference_c_step_us": c_step,
+            "threshold_us": spec.threshold_us,
+            "verdict": verdict,
+        },
+    )
+
+    typer.echo("n_prey  n_pred  median_us  perception  decision  rules")
+    for row in summary:
+        typer.echo(
+            f"{row['n_prey']:>6}  {row['n_predators']:>6}  {row['median_us_per_step']:>9}  "
+            f"{row['median_perception_us_per_step']:>10}  {row['median_decision_us_per_step']:>8}  "
+            f"{row['median_rules_us_per_step']:>6}"
+        )
+    typer.echo(
+        f"reference ({spec.reference_prey} prey, {spec.reference_predators} predators): "
+        f"c_step = {c_step:.1f} us  threshold = {spec.threshold_us:.0f} us  -> {verdict}"
+    )
+    typer.echo(f"results written to {output_dir}")
