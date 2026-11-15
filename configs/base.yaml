@@ -5,5 +5,33 @@
 # changing it invalidates every pilot, run and result derived from it.
 project_seed: 151810796106167051982782525292607188790
 
-# World, species and interaction parameters are added in F1 and calibrated in
-# P1 (ADR-020, ADR-029, ADR-030).
+# World parameters. PROVISIONAL pre-P1 values (decision A5, docs/phase_gates.md): they satisfy
+# the invariants K1-K4 and the calibration targets E1, E2, E5, and exist only to run and test
+# F1. P1 (F4) calibrates and freezes the definitive values (ADR-020).
+world:
+  size: 150.0
+  t_max: 1000
+  n_prey: 25
+  n_predators: 3
+  n_plants: 40
+  regrow_delay: 50
+  capture_radius: 2.5     # K1: >= 1.3 + 1.0
+  eat_radius: 1.5         # K2: >= 1.0
+  plant_energy: 30.0      # E5: <= 0.5 * prey.e_max
+  prey_energy: 40.0
+  prey:
+    v_max: 1.0
+    omega_max: 0.5        # K4: > predator.omega_max
+    vision_radius: 20.0   # K3: < size / 2
+    e_max: 100.0
+    initial_energy_fraction: 0.8
+    c_basal: 0.16         # E1: 80 / 0.16 = 500 = 0.5 * t_max
+    c_move: 0.32          # E2: >= c_basal
+  predator:
+    v_max: 1.3            # K4: > prey.v_max
+    omega_max: 0.3
+    vision_radius: 20.0
+    e_max: 100.0
+    initial_energy_fraction: 0.8
+    c_basal: 0.16
+    c_move: 0.32

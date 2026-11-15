@@ -1,0 +1,8 @@
+# Experimental scenarios (ADR-029): A is the reference; B and C change exactly one factor.
+# PROVISIONAL pre-P1 values (decision A5); P1 calibrates them (ADR-020).
+scenarios:
+  A: {}                  # abundance: base values
+  B:                     # scarcity: lower plant density only
+    n_plants: 15
+  C:                     # predation pressure: more predators only
+    n_predators: 8
