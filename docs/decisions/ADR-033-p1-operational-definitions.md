@@ -200,7 +200,7 @@ supervivencia media de la presa y fracción capturada (D5).
 
 *Columnas mínimas por episodio* (calculadas por `application/calibration.py` a partir del
 `EpisodeRecord`, sin cambiar las métricas de F1): bloque, etapa, iteración, escenario, condición,
-las seis componentes de la clave, valores de todos los parámetros ajustables, hash de la
+las nueve columnas de clave de P1-13, valores de todos los parámetros ajustables, hash de la
 configuración, `steps`, numerador y denominador de la supervivencia de la presa, presas vivas al
 final, capturas, muertes por inanición de presas, plantas comidas, exposición (Σ pasos-presa
 vivos), capturas antes de 0.05·T_max, `prey_net_energy_rate`, depredadores muertos por inanición,
@@ -453,3 +453,6 @@ iteraciones; ADR de congelamiento; etiqueta `env-frozen-v1`.
   registro de las claves en el CSV se precisó (cinco columnas comunes y cuatro columnas de flujo,
   y cómo se reconstruye cada flujo). No cambia ninguna decisión ni el esquema de semillas de
   ADR-028.
+- **Precisión documental posterior a T0b** (revisión del autor): la lista de columnas mínimas de
+  P1-16 remite ahora a "las nueve columnas de clave de P1-13" en lugar de "las seis componentes de
+  la clave", para que coincida con P1-13. No cambia ninguna decisión.
