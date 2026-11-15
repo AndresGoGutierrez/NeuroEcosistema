@@ -19,6 +19,9 @@ dependencies = [
     "pygame-ce>=2.5",
 ]
 
+[project.scripts]
+neuroeco = "neuroeco.launcher:main"
+
 [dependency-groups]
 dev = [
     "pytest>=8.3",
@@ -75,7 +78,9 @@ include_external_packages = true
 name = "Clean Architecture layers"
 type = "layers"
 layers = [
+    "neuroeco.launcher",
     "neuroeco.presentation",
+    "neuroeco.bootstrap",
     "neuroeco.infrastructure",
     "neuroeco.application",
     "neuroeco.domain",

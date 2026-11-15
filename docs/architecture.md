@@ -6,13 +6,17 @@ de cada decisión están en la [bitácora de decisiones](decisions/README.md).
 ## Capas y regla de dependencias
 
 ```
+launcher (fija el entorno numérico y arranca la CLI)
+        │
+        ▼
 presentation (cli, viewer, inspector)
         │
-launcher → bootstrap (composition root) ──instancia──► infrastructure
-        │                                              (config_loader, storage, executors,
-        ▼                                               runtime_env, provenance)
-application (ports, configs, seeding, metrics,                 │ implementa los puertos
-             training, evaluation, session) ◄──────────────────┘
+        ▼
+bootstrap (composition root) ──instancia──► infrastructure
+        │                                   (config_loader, storage, executors,
+        ▼                                    runtime_env, provenance)
+application (ports, configs, seeding, metrics,          │ implementa los puertos
+             training, evaluation, session) ◄───────────┘
         │
         ▼
 domain  [solo biblioteca estándar + numpy]
@@ -25,16 +29,20 @@ analysis (stats, report) ── solo lee ──► results/*.csv
 | `domain` | stdlib, `numpy`, `neuroeco.domain` | Reglas del ecosistema, percepción, acciones, políticas, red neuronal, algoritmo genético, fitness |
 | `application` | lo anterior y `neuroeco.application` | Casos de uso (entrenar, evaluar, sesión interactiva), puertos, política de semillas, métricas |
 | `infrastructure` | capas inferiores y bibliotecas de E/S | Implementación de los puertos: YAML, CSV, `.npz`, JSON, pool de procesos, control de hilos BLAS, procedencia |
+| `bootstrap` | `infrastructure`, `application`, `domain` | Raíz de composición: carga la configuración, crea el `SeedRegistry` y construye las políticas por nombre |
 | `presentation` | todas las anteriores | CLI y visor de solo lectura |
+| `launcher` | `presentation` | Punto de entrada `neuroeco`: fija las variables de hilos antes de importar numpy (ADR-016) |
 | `analysis` | bibliotecas científicas; **no** importa el núcleo | Pruebas estadísticas, tablas y figuras a partir de archivos de resultados |
 
-`launcher.py` y `bootstrap.py` se crean en F1, cuando exista el primer punto de entrada.
+Ejecución exploratoria: `uv run neuroeco run --scenario A --prey rules --predator rules`. Usa
+semillas del propósito PILOT con el `seed_group` 0, **reservado para ejecuciones exploratorias**;
+los pilotos formales declaran su propio `seed_group` (ADR-028).
 
 ## Verificación automática de la arquitectura
 
 | Mecanismo | Qué comprueba |
 |---|---|
-| `lint-imports`, contrato *layers* | `presentation → infrastructure → application → domain`, sin dependencias hacia arriba |
+| `lint-imports`, contrato *layers* | `launcher → presentation → bootstrap → infrastructure → application → domain`, sin dependencias hacia arriba |
 | `lint-imports`, contrato *forbidden* | `domain` y `application` no importan `yaml`, `pandas`, `scipy`, `matplotlib`, `pygame`, `typer` ni `threadpoolctl` |
 | `lint-imports`, contrato *forbidden* | `analysis` no importa `domain`, `application`, `infrastructure` ni `presentation` |
 | `tests/architecture/test_layer_imports.py` | Lista blanca estricta: cualquier importación de `domain` o `application` que no sea stdlib, `numpy` o un paquete interno permitido hace fallar la prueba (incluye importaciones relativas) |
