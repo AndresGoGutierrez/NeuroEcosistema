@@ -1,0 +1,9 @@
+# NeuroEcosistema - base configuration.
+#
+# project_seed: root entropy for every random stream of the project (ADR-028).
+# Generated once in F0 with secrets.randbits(128). It MUST NOT change afterwards:
+# changing it invalidates every pilot, run and result derived from it.
+project_seed: 151810796106167051982782525292607188790
+
+# World, species and interaction parameters are added in F1 and calibrated in
+# P1 (ADR-020, ADR-029, ADR-030).

@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# Environment
+.venv/
+
+# Tool caches
+.pytest_cache/
+.ruff_cache/
+.import_linter_cache/
+.mypy_cache/
+
+# Raw run outputs (curated evidence goes to results/ and models/)
+runs/
+
+# Office lock files
+~$*
+
+# Academic proposal (reference document; kept out of the repository by decision of the author)
+Propuesta_Proyecto_Final_*.docx
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
