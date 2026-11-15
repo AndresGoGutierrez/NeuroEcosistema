@@ -17,7 +17,7 @@ del proyecto y no se incluye en este repositorio. Las secciones de la propuesta 
 |---|---|---|
 | F0 | Fundaciones: repositorio, entorno, contratos de arquitectura, decisiones (ADR) | Cerrada |
 | F1 | Núcleo de simulación y piloto P0 | Cerrada (P0 con plan de optimización) |
-| F2 | Visualización: visor, HUD, inspector y registro de `--set` | En curso |
+| F2 | Visualización: visor, HUD, inspector y registro de `--set` | Completada |
 | F3–F9 | Estadística, calibración, redes, neuroevolución, protocolo, experimentos, entregables | Pendientes |
 
 El plan completo y los criterios de cierre de cada fase están en
