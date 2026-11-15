@@ -116,7 +116,11 @@ de cómputo disponibles, necesarias para P3 (F6).
 ## F2: Visualización
 
 - **Inicio:** 2026-11-15, con autorización expresa del autor tras revisar el plan.
-- **Estado:** en curso.
+- **Cierre:** 2026-11-15, tras la verificación visual del autor en su equipo.
+- **Estado:** ✅ Cerrada. Todos los criterios de ADR-024 y las condiciones del autor cumplidos.
+- **Último commit de código:** `08eeba7` (`feat(cli): add view command with HUD, inspector and
+  session record`), autor único `AndresGoGutierrez`; CI `43752395964`: Ubuntu y Windows en
+  success, 273 pruebas en cada sistema, sin omitidas.
 - **Fuera del alcance:** estadística (F3), activaciones en el inspector y política neuronal
   (F5), `RunStore` y manifest de ejecuciones formales (F6), figuras (F3, F8).
 - **Restricciones:** sin cambios en el comportamiento del simulador de F1, en `domain`, en
@@ -139,16 +143,45 @@ de cómputo disponibles, necesarias para P3 (F6).
 **Tareas:** T0 documentación · T1 datos de sesión · T2 inspector y selección · T3 visor ·
 T4 registro de la sesión · T5 comando `view` · T6 verificación visual · T7 cierre.
 
-| Criterio de cierre (ADR-024 y condiciones del autor) | Estado |
-|---|---|
-| Hash con visor = hash sin visor, por paso | ⏳ |
-| Dibujar no modifica el estado | ⏳ |
-| Pausar y avanzar pasos no alteran la trayectoria | ⏳ |
-| Seleccionar agentes no interfiere con la simulación | ⏳ |
-| Las políticas aleatorias conservan exactamente sus resultados | ⏳ |
-| `view` y `run` producen los mismos hashes y métricas con la misma configuración | ⏳ |
-| Inspector = traza, respetando S_t (observaciones) y S_t+1 (estado tras el paso) | ⏳ |
-| `--set` registrado: sobrescrituras literales, hash de configuración, semillas y procedencia | ⏳ |
-| Una sesión cerrada anticipadamente queda registrada | ⏳ |
-| Las 209 pruebas de F1 siguen pasando; visor comprobado con el driver `dummy` en Ubuntu y Windows | ⏳ |
-| Verificación visual manual del autor | ⏳ |
+**Commits:**
+
+| Tarea | Commit | CI (Ubuntu y Windows) |
+|---|---|---|
+| T0 documentación, ADR-031 y contrato V8 | `879c461` | `43750657089` ✅ |
+| T1 datos de sesión | `4f8d5c7` | `43750925887` ✅ |
+| T2 inspector y selección | `6bba2c8` | `43751202616` ✅ |
+| T3 visor | `eedf548` | `43751820194` ✅ |
+| T4 registro de la sesión | `ed34f15` | `43752086288` ✅ |
+| T5 comando `view` | `08eeba7` | `43752395964` ✅ |
+| T6 verificación visual | Sin commit (capturas no versionadas, V9) | — |
+
+| Criterio de cierre (ADR-024 y condiciones del autor) | Evidencia | Estado |
+|---|---|---|
+| Hash con visor = hash sin visor, por paso | `tests/determinism/test_viewer_noninterference.py`: visor real (driver `dummy`) en A, B y C con políticas por reglas y aleatoria; hash SHA-256 del estado idéntico en cada paso y métricas idénticas | ✅ |
+| Dibujar no modifica el estado | `test_drawing_does_not_modify_the_state` (hash del mundo antes y después de dibujar con un agente seleccionado) | ✅ |
+| Pausar y avanzar pasos no alteran la trayectoria | Prueba de hashes con una secuencia guionizada: pausa en S₀, avances de un paso, reanudación, nueva pausa y cambios de velocidad | ✅ |
+| Seleccionar agentes no interfiere con la simulación | La misma prueba, con clics en una presa, en un depredador y en una zona vacía durante el episodio | ✅ |
+| Las políticas aleatorias conservan exactamente sus resultados | La misma prueba con la política aleatoria en ambas especies | ✅ |
+| `view` y `run` producen los mismos hashes y métricas con la misma configuración | `tests/integration/test_view_command.py`: los comandos reales `run` y `view` con los mismos argumentos dan hashes por paso idénticos y las mismas métricas | ✅ |
+| Inspector = traza, respetando S_t (observaciones) y S_t+1 (estado tras el paso) | `tests/unit/application/test_session.py`: comparación exacta, agente por agente y paso a paso, de entradas con nombre, salida, acción decodificada, energía, posición, rumbo y aplicación de la acción (incluye muertos en el mismo paso y muertos antes) | ✅ |
+| `--set` registrado: sobrescrituras literales, hash de configuración, semillas y procedencia | `tests/unit/presentation/test_view_record.py` y `test_view_command.py`: registro con estado `running` antes del primer paso, procedencia capturada antes de escribir nada, JSON estricto y escritura atómica | ✅ |
+| Una sesión cerrada anticipadamente queda registrada | `test_view_command.py`: estados `closed` (con el paso alcanzado), `interrupted` y `error` | ✅ |
+| Las 209 pruebas de F1 siguen pasando; visor comprobado con el driver `dummy` en Ubuntu y Windows | 273 pruebas en verde en ambos sistemas (CI `43752395964`); el código de F1 (`domain`, `application/evaluation`, métricas, semillas, `launcher`, `bootstrap`) y `uv.lock` no cambiaron desde `9344ee2` | ✅ |
+| Verificación visual manual del autor | Escenarios A, B y C comprobados por el autor en su equipo (2026-11-15): pausa, avance, velocidad, selección, inspector, HUD, salida y registro. Antes, revisión de capturas de A (S₀ y paso 80), B (paso 120) y C (paso 60) generadas con el driver `dummy` | ✅ |
+| Comprobaciones generales | `ruff check`, `ruff format --check`, `lint-imports` (4 contratos) y `pytest` (273 pruebas, 13 de determinismo) en verde | ✅ |
+
+**Sensibilidad de las pruebas:** se comprobó fuera del repositorio que la prueba de hashes falla
+si los fotogramas compartieran memoria con el estado y el dibujo escribiera en él (1e-9 en una
+posición), y que el contrato V8 detecta un módulo temporal de `infrastructure` que importa
+pygame.
+
+**Incidencias durante F2:**
+
+- Una prueba de T2 contenía una aserción vacía (`... or True`); se detectó al revisar y se
+  sustituyó por una comprobación real antes del commit.
+- Dos defectos de formato del panel detectados por las pruebas antes del commit: la línea de
+  aplicación de la acción se confundía con las entradas y la ayuda no cabía en el panel.
+- Ningún fallo de push ni de CI.
+
+**Observación para fases posteriores:** el inspector muestra `-0.0000` cuando una componente es
+un cero negativo (p·cos φ con p = 0); se conserva porque reproduce la traza tal cual.

@@ -8,7 +8,7 @@ se mantiene como registro durante todo el proyecto; la versión resumida irá en
 
 | Herramienta | Uso |
 |---|---|
-| Claude Code (modelo Claude Opus 5.5, Anthropic) | Análisis de la propuesta, diseño de arquitectura y metodología, redacción de ADR, andamiaje del repositorio, implementación y pruebas del núcleo de simulación (F1), piloto P0 |
+| Claude Code (modelo Claude Opus 5.5, Anthropic) | Análisis de la propuesta, diseño de arquitectura y metodología, redacción de ADR, andamiaje del repositorio, implementación y pruebas del núcleo de simulación (F1), piloto P0, visor e inspector (F2) |
 
 ## Registro
 
@@ -80,3 +80,29 @@ integración y de determinismo; comando y análisis del piloto P0; redacción de
 Ubuntu y Windows después de cada tarea; pruebas de determinismo DET-1, DET-2 y DET-5;
 comprobación numérica independiente de la antisimetría del desplazamiento toroidal; revisión por
 el autor del criterio de aceptación de P0.
+
+### 2026-11-15: F2 (visualización)
+
+**Uso:** propuesta del plan de F2 y de las decisiones V1–V9; redacción de ADR-031;
+implementación de los fotogramas de sesión, el inspector, el visor pygame, el registro de la
+sesión y el comando `view`; pruebas de no interferencia, de correspondencia con la traza y del
+registro; capturas de comprobación.
+
+**Decisiones del autor:** aprobó V1–V9 tal como se propusieron. Añadió como condiciones de
+aceptación obligatorias que se demostrara por separado que dibujar, pausar, avanzar y
+seleccionar no alteran la trayectoria, que las políticas aleatorias conservan sus resultados,
+que `view` y `run` coinciden y que el inspector respeta la diferencia entre S_t y S_t+1. Exigió
+su verificación visual manual antes del cierre.
+
+**Errores detectados por la propia IA:**
+
+- Una aserción vacía (`... or True`) en una prueba de selección, sustituida por una comprobación
+  real antes del commit.
+- Dos defectos de formato del panel del inspector, detectados por las pruebas antes del commit.
+- En la prueba de no interferencia, una llamada que habría dejado el visor esperando
+  indefinidamente al final del episodio; se corrigió antes de ejecutarla en CI.
+
+**Validaciones:** `ruff`, `lint-imports` (4 contratos) y `pytest` (273 pruebas) antes de cada
+commit; CI en Ubuntu y Windows después de cada tarea; comprobación de que la prueba de hashes
+falla ante una interferencia inyectada y de que el contrato de pygame detecta una importación
+prohibida; revisión de capturas; verificación visual del autor en su equipo.
