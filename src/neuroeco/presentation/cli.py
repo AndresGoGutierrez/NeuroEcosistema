@@ -3,15 +3,19 @@
 from __future__ import annotations
 
 import dataclasses
+import math
 import statistics
 import sys
 import time
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
 import typer
 
+from neuroeco.application.configs import ResolvedConfig
 from neuroeco.application.evaluation import EpisodeIdentity, run_episode, time_episode
+from neuroeco.application.metrics import EpisodeMetrics, Ratio
 from neuroeco.application.seeding import Purpose
 from neuroeco.bootstrap import (
     DEFAULT_CONFIG_DIR,
@@ -32,6 +36,62 @@ pilot_app = typer.Typer(no_args_is_help=True, help="Pilot studies.")
 app.add_typer(pilot_app, name="pilot")
 
 USER_ERRORS = (ConfigError, ConfigurationError, InitializationError, ValueError)
+
+VIEW_RECORD_SCHEMA = "neuroeco.view-session/1"
+
+
+def metrics_to_json(metrics: EpisodeMetrics) -> dict[str, Any]:
+    """Exact JSON form of the metrics: ratios as integers, undefined values as null."""
+    data: dict[str, Any] = {}
+    for field in dataclasses.fields(metrics):
+        value = getattr(metrics, field.name)
+        if isinstance(value, Ratio):
+            data[field.name] = {"numerator": value.numerator, "denominator": value.denominator}
+        elif isinstance(value, float) and math.isnan(value):
+            data[field.name] = None
+        else:
+            data[field.name] = value
+    return data
+
+
+def build_view_record(
+    *,
+    session_id: str,
+    config: ResolvedConfig,
+    overrides: Sequence[str],
+    prey_policy: str,
+    predator_policy: str,
+    identity: EpisodeIdentity,
+    viewer_options: dict[str, Any],
+    provenance: dict[str, Any],
+) -> dict[str, Any]:
+    """Initial record of a `view` session (ADR-031, decision V2); status `running`."""
+    return {
+        "schema": VIEW_RECORD_SCHEMA,
+        "session_id": session_id,
+        "status": "running",
+        "ended_utc": None,
+        "scenario": config.scenario,
+        "overrides": list(overrides),  # literal, in the order given
+        "config_hash": config.config_hash,
+        "project_seed": config.project_seed,
+        "seed_identity": {
+            "purpose": identity.purpose.name,
+            "purpose_code": int(identity.purpose),
+            "seed_group": identity.seed_group,
+            "run": identity.run,
+            "generation": identity.generation,
+            "item": identity.item,
+        },
+        "policies": {"prey": prey_policy, "predator": predator_policy},
+        "world": dataclasses.asdict(config.world),
+        "rules": dataclasses.asdict(config.rules),
+        "viewer": dict(viewer_options),
+        "provenance": provenance,
+        "steps_completed": None,
+        "metrics": None,
+        "error": None,
+    }
 
 
 @app.callback()
