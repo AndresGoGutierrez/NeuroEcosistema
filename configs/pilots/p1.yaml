@@ -1,0 +1,19 @@
+# Pilot P1: ecological calibration (ADR-020; operational definitions in ADR-033).
+# Declares only what ADR-028 and ADR-033 require to be declared: the blocks with their
+# seed_group per scenario (P1-5, P1-13) and the rule-policy grids (P1-4). The conditions,
+# budgets and bootstrap settings are code constants (neuroeco.application.calibration).
+# seed_group 0 is exploratory and 1 belongs to P0; the loader rejects any reuse.
+pilot: P1
+blocks:
+  calibration:            # same seeds in every iteration (P1-5)
+    episodes: 30
+    seed_groups: {a: 10, b: 11, c: 12}
+  confirmation:           # run once, only with the author's explicit authorization (P1-21)
+    episodes: 50
+    seed_groups: {a: 20, b: 21, c: 22}
+  second_confirmation:    # only after a documented and authorized recalibration (P1-21)
+    episodes: 50
+    seed_groups: {a: 30, b: 31, c: 32}
+grids:
+  prey_flee_threshold: [0.2, 0.3, 0.4, 0.5]   # p_flee
+  cruise_fraction: [0.3, 0.5, 0.7]            # u_cruise, prey and predator

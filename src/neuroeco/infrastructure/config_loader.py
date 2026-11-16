@@ -19,6 +19,7 @@ from typing import Any
 
 import yaml
 
+from neuroeco.application.calibration import IterationSpec, P1Spec, RoundSpec
 from neuroeco.application.configs import P0Spec, ResolvedConfig, RuleParams
 from neuroeco.domain.params import WorldParams
 
@@ -163,3 +164,31 @@ def check_unique_seed_groups(declared: Mapping[str, int]) -> None:
         if group in owners:
             raise ConfigError(f"seed_group {group} is declared by both {owners[group]} and {name}")
         owners[group] = name
+
+
+def _build_spec[T](cls: type[T], path: Path) -> T:
+    try:
+        return build_dataclass(cls, read_yaml(path), path.stem)
+    except ValueError as error:  # ConfigError and the dataclass validations
+        raise ConfigError(f"{path}: {error}") from error
+
+
+def load_p1_spec(path: Path, existing_seed_groups: Mapping[str, int]) -> P1Spec:
+    """Pilot P1 specification (ADR-033, P1-13).
+
+    ``existing_seed_groups`` are the groups already declared elsewhere (for example the
+    exploratory group 0 and the group of P0); P1 must not reuse any of them (ADR-028).
+    """
+    spec = _build_spec(P1Spec, path)
+    check_unique_seed_groups({**existing_seed_groups, **spec.declared_seed_groups()})
+    return spec
+
+
+def load_iteration_spec(path: Path) -> IterationSpec:
+    """Pre-registered calibration iteration, ``configs/pilots/p1/iterations/NNN.yaml``."""
+    return _build_spec(IterationSpec, path)
+
+
+def load_round_spec(path: Path) -> RoundSpec:
+    """Pre-registered rule-tuning round, ``configs/pilots/p1/rounds/RR.yaml``."""
+    return _build_spec(RoundSpec, path)

@@ -289,9 +289,10 @@ local, más que los ≈ 80 s estimados en ADR-032; no cambia ningún parámetro 
 
 ## F4: P1, calibración ecológica
 
-- **Inicio:** 2026-11-15, con autorización expresa del autor limitada a T0; después, T0b.
-- **Estado:** 🔄 En curso. T0 y T0b (documentación) completadas; T0b pendiente de la revisión
-  final del autor. T1 y la ejecución de episodios no están autorizadas.
+- **Inicio:** 2026-11-15, con autorización expresa del autor limitada a T0; después, T0b y T1.
+- **Estado:** 🔄 En curso. T0 y T0b cerradas tras la revisión del autor; T1 (especificación y
+  cargador de P1) completada y pendiente de revisión. T2 y la ejecución de episodios no están
+  autorizadas.
 - **Criterio de cierre (ADR-024):** criterios de ADR-020 (clase A completa en la confirmación;
   cada B cumplido o aceptado mediante ADR; cada C investigado y documentado), `p_flee` y
   `u_cruise` ajustados y congelados (ADR-012) y etiqueta `env-frozen-v1`.
@@ -338,14 +339,37 @@ No se vuelve de B o C a A; agotar un presupuesto detiene F4 y obliga a consultar
 
 **Tareas previstas:** T0 documentación · T0b corrección de ADR-033 tras la auditoría · T1
 especificación y cargador de P1 · T2 comprobador A2 y ejecución por bloques · T3 comando
-`pilot p1` · T4 evaluación de criterios desde CSV · T5… iteraciones de calibración · confirmación
-(con autorización expresa) · congelamiento (P1-2, ADR de valores, etiqueta) · cierre.
+`pilot p1` · T4 evaluación de criterios desde CSV · **T4b verificador de la secuencia de
+calibración** · T5… iteraciones de calibración · confirmación (con autorización expresa) ·
+congelamiento (P1-2, ADR de valores, etiqueta) · cierre.
+
+**T4b (pendiente, decisión T1-2 del autor):** verificador de las restricciones de la máquina de
+estados que dependen de resultados, ejecutado antes de autorizar cada iteración: que S_A, S_B o
+S_C se cumplieron o no en la evaluación anterior, las iteraciones "infructuosas" de D9, las
+alternancias provocadas por una reevaluación A_rev fallida y que las reglas cambien solo a los
+valores ganadores de una ronda. T1 cubre únicamente las comprobaciones estáticas, que no
+necesitan resultados.
+
+**Decisiones de T1 (aprobadas por el autor):**
+
+| ID | Decisión |
+|---|---|
+| T1-1 | Dataclasses de la especificación en `application/calibration.py`; sin cambios en `application/configs.py` |
+| T1-2 | Validación estática en T1; la dependiente de resultados, en la tarea T4b |
+| T1-3 | Cada especificación de iteración es una instantánea completa de los 8 valores; el validador exige que cambie exactamente el parámetro declarado |
+| T1-4 | `configs/pilots/p1.yaml`, `configs/pilots/p1/iterations/NNN.yaml` y `configs/pilots/p1/rounds/RR.yaml` |
+| T1-5 | Catálogo de condiciones, presupuestos, límites y parámetros del bootstrap como constantes de código protegidas por pruebas |
+| T1-6 | Constructores de claves de episodios (P1-13) y del bootstrap (P1-20) y estado K en T1 |
+| T1-7 | Registro en este documento dentro del commit de T1 |
 
 **Commits:**
 
 | Tarea | Commit | CI (Ubuntu y Windows) |
 |---|---|---|
 | T0 ADR-033 (P1-1 a P1-22), plan y estado | `deb2ac4` | `43771573602` ✅ |
+| T0b corrección de ADR-033 tras la auditoría (D1–D18, P1-23, P1-24) | `50c8a1d` | `43774119505` ✅ |
+| T0b precisión de P1-13 (columnas de clave) | `e3dcd13` | `43775574419` ✅ |
+| T0b precisión de P1-16 (remisión a P1-13) | `38e1803` | `43776616239` ✅ |
 
 **Incidencias durante F4:**
 
