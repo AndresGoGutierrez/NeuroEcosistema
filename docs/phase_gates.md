@@ -484,6 +484,7 @@ necesitan resultados.
 | T2 comprobador A2 y ejecución por bloques | `85509b0` | `43780607071` ✅ |
 | T3 comando `pilot p1` y CSV de episodios y claves | `b53f547` | `43783541818` ✅ |
 | T3b correcciones de la auditoría de T3 | `8daa461` | `43790449030` ✅ |
+| T3c correcciones de la auditoría de T3b | `e4900ba` | `43795462046` ❌ (Windows; Ubuntu ✅) |
 
 **Incidencias durante F4:**
 
@@ -506,3 +507,10 @@ necesitan resultados.
   iteraciones. Al corregirlo en T3c, una revisión propia encontró dos vías más para disfrazar un
   contenido modificado como el de HEAD (un filtro `clean` configurado solo en `.git` y la
   sustitución del commit con `git replace`), que también quedaron bloqueadas.
+- El CI de `e4900ba` falló solo en Windows, en la prueba de conversión de fin de línea: el CI
+  extrae el proyecto con CRLF (`core.autocrlf=true`) y la prueba guardaba esos CRLF en el
+  repositorio temporal, de modo que la premisa (LF en HEAD) no se cumplía. El código de
+  producción era correcto: detectaba que esos archivos no eran el contenido de HEAD. Un commit
+  correctivo de T3c renormaliza los blobs en la prueba, comprueba explícitamente sus finales de
+  línea y añade el caso contrario (blob CRLF bajo un atributo `text`), para que no dependa del
+  sistema operativo. El repositorio real no tiene blobs con CRLF.

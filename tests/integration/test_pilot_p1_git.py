@@ -288,13 +288,49 @@ def test_a_replaced_head_commit_is_refused(repo) -> None:
     )
 
 
+def crlf(path: Path) -> None:
+    """Rewrite ``path`` with CRLF line endings, whatever its current endings are."""
+    path.write_bytes(path.read_bytes().replace(b"\r\n", b"\n").replace(b"\n", b"\r\n"))
+
+
+def eol_info(repo: Path, name: str) -> str:
+    """The index and working-tree line endings that ``git ls-files --eol`` reports."""
+    return git(repo, "ls-files", "--eol", "--", name).split("\t")[0]
+
+
 def test_end_of_line_conversion_is_not_a_mismatch(repo) -> None:
-    """``git hash-object`` applies the filters: a CRLF checkout of an LF blob is equal."""
+    """``git hash-object`` applies the filters: a CRLF checkout of an LF blob is equal.
+
+    The blobs are renormalized after adding the attribute, so the premise (LF in HEAD) holds
+    whatever line endings the files had on disk: on Windows the project checkout, and with it
+    the copied configuration, may use CRLF (``core.autocrlf=true``).
+    """
     (repo / ".gitattributes").write_text("*.yaml text eol=crlf\n", encoding="utf-8")
+    git(repo, "add", ".gitattributes")
+    git(repo, "add", "--renormalize", ".")
     commit_all(repo, "attributes")
     base = repo / "configs" / "base.yaml"
-    base.write_bytes(base.read_bytes().replace(b"\r\n", b"\n").replace(b"\n", b"\r\n"))
+    crlf(base)
+    assert eol_info(repo, "configs/base.yaml").split()[0] == "i/lf"
+    assert b"\r\n" in base.read_bytes()
     assert git_head_mismatches(repo) == []
+
+
+def test_a_crlf_blob_under_a_text_attribute_is_a_mismatch(repo) -> None:
+    """The stricter case: HEAD keeps CRLF but the attribute normalizes the file to LF.
+
+    Adding the file again would store a different blob, so it is not the content of HEAD even
+    when ``git status`` (which trusts the cached file times and sizes) reports nothing.
+    """
+    base = repo / "configs" / "base.yaml"
+    crlf(base)
+    git(repo, "add", "configs/base.yaml")
+    git(repo, "commit", "-q", "--allow-empty", "-m", "crlf blob")  # empty if already CRLF
+    (repo / ".gitattributes").write_text("*.yaml text eol=crlf\n", encoding="utf-8")
+    git(repo, "add", ".gitattributes")  # only the attribute: base.yaml is not added again
+    git(repo, "commit", "-q", "-m", "attributes")
+    assert eol_info(repo, "configs/base.yaml").split()[0] == "i/crlf"
+    assert "configs/base.yaml" in git_head_mismatches(repo)
 
 
 def test_the_package_must_be_the_repository_code(repo, monkeypatch) -> None:
