@@ -289,11 +289,11 @@ local, más que los ≈ 80 s estimados en ADR-032; no cambia ningún parámetro 
 
 ## F4: P1, calibración ecológica
 
-- **Inicio:** 2026-11-15, con autorización expresa del autor limitada a T0; después, T0b, T1 y
-  T2, cada una autorizada por separado.
-- **Estado:** 🔄 En curso. T0, T0b y T1 aprobadas por el autor; T2 (comprobador A2 y ejecución
-  por bloques) completada y pendiente de revisión. T3 y la ejecución de episodios de P1 no están
-  autorizadas.
+- **Inicio:** 2026-11-15, con autorización expresa del autor limitada a T0; después, T0b, T1, T2
+  y T3, cada una autorizada por separado.
+- **Estado:** 🔄 En curso. T0, T0b, T1 y T2 aprobadas por el autor (T2 tras una auditoría, con
+  observaciones); T3 (comando `pilot p1`) completada y pendiente de revisión. T4 y la ejecución de
+  episodios de P1 no están autorizadas.
 - **Criterio de cierre (ADR-024):** criterios de ADR-020 (clase A completa en la confirmación;
   cada B cumplido o aceptado mediante ADR; cada C investigado y documentado), `p_flee` y
   `u_cruise` ajustados y congelados (ADR-012) y etiqueta `env-frozen-v1`.
@@ -341,8 +341,29 @@ No se vuelve de B o C a A; agotar un presupuesto detiene F4 y obliga a consultar
 **Tareas previstas:** T0 documentación · T0b corrección de ADR-033 tras la auditoría · T1
 especificación y cargador de P1 · T2 comprobador A2 y ejecución por bloques · T3 comando
 `pilot p1` · T4 evaluación de criterios desde CSV · **T4b verificador de la secuencia de
-calibración** · T5… iteraciones de calibración · confirmación (con autorización expresa) ·
-congelamiento (P1-2, ADR de valores, etiqueta) · cierre.
+calibración** · **T4c ejecución de las rondas de la rejilla** · T5… iteraciones de calibración ·
+confirmación (con autorización expresa) · congelamiento (P1-2, ADR de valores, etiqueta) · cierre.
+
+**T4c (pendiente, decisión T3-2 del autor):** ejecución de las rondas de ajuste de las reglas
+(P1-17): la rejilla de la presa, la selección de su ganador con los objetivos y el orden de
+desempate de P1-17 a partir de los CSV (lo que implementa T4), la rejilla del depredador con ese
+ganador y la reevaluación A_rev. Va después de T4 porque necesita la selección sobre resultados;
+T3 no ejecuta rondas.
+
+**Decisiones de T3 (aprobadas por el autor; detalle en
+[p1_data_dictionary.md](p1_data_dictionary.md)):**
+
+| ID | Decisión |
+|---|---|
+| T3-1 | Modos `--iteration`, `--entry-evaluation`, `--confirmation` y `--second-confirmation`; la evaluación de entrada y las confirmaciones toman los valores con `--values-from` de la última iteración registrada, de la etapa C |
+| T3-2 | Las rondas de la rejilla quedan fuera de T3 (tarea T4c) |
+| T3-3 | `results/pilots/p1/<bloque>/<iteration_NNN \| entry \| evaluation>/`, sin sobrescritura |
+| T3-4 | Un error deja `<destino>.failed-<UTC>-<id>/` con `failure.json` y, si ya existía, `provenance.json`; ningún CSV parcial ni resultado definitivo |
+| T3-5 | Árbol de git limpio obligatorio, sin opción para saltarlo; las pruebas simulan el resultado de la comprobación |
+| T3-6 | Validación estática de la secuencia y estado K antes de cualquier episodio |
+| T3-7 | Diccionario de datos en `docs/p1_data_dictionary.md` |
+| T3-8 | Comando en `presentation/pilot_p1.py`; en `cli.py`, `storage.py` y `provenance.py` solo añadidos |
+| T3-9 | `--author-authorized`, más la comprobación independiente de los grupos de semillas del bloque |
 
 **T4b (pendiente, decisión T1-2 del autor):** verificador de las restricciones de la máquina de
 estados que dependen de resultados, ejecutado antes de autorizar cada iteración: que S_A, S_B o
@@ -372,6 +393,7 @@ necesitan resultados.
 | T0b precisión de P1-13 (columnas de clave) | `e3dcd13` | `43775574419` ✅ |
 | T0b precisión de P1-16 (remisión a P1-13) | `38e1803` | `43776616239` ✅ |
 | T1 especificación y cargador de P1 | `1bd2c4d` | `43778824799` ✅ |
+| T2 comprobador A2 y ejecución por bloques | `85509b0` | `43780607071` ✅ |
 
 **Incidencias durante F4:**
 

@@ -38,10 +38,12 @@ from neuroeco.infrastructure.storage import (
     write_json,
 )
 from neuroeco.presentation.inspector import SessionInfo
+from neuroeco.presentation.pilot_p1 import pilot_p1
 
 app = typer.Typer(no_args_is_help=True, help="NeuroEcosistema command-line interface.")
 pilot_app = typer.Typer(no_args_is_help=True, help="Pilot studies.")
 app.add_typer(pilot_app, name="pilot")
+pilot_app.command("p1")(pilot_p1)  # F4 T3 (ADR-033)
 
 USER_ERRORS = (ConfigError, ConfigurationError, InitializationError, ValueError)
 

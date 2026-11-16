@@ -15,9 +15,15 @@ Execution (F4 T2):
 - the A2 invariant checker, a read-only observer of the simulation (P1-22);
 - the planning and the execution of the episodes of a block.
 
+Result rows (F4 T3), pure computations used by the ``pilot p1`` command:
+
+- the scenarios of each stage, the independent check of a block's seed groups;
+- one ``episodes.csv`` row per episode (P1-13, P1-16) and the ``bootstrap_keys.csv`` rows
+  (P1-20). Columns and types are documented in ``docs/p1_data_dictionary.md``.
+
 Checks that depend on results (S_A met, "unsuccessful" iterations in D9, alternations caused by a
-failed re-evaluation) belong to the calibration sequence verifier (task T4b). Writing CSV files
-and provenance belongs to the ``pilot p1`` command (task T3).
+failed re-evaluation) belong to the calibration sequence verifier (task T4b). The criteria are
+evaluated by ``analysis`` (task T4). File writing and provenance belong to the command.
 """
 
 from __future__ import annotations
@@ -33,6 +39,7 @@ import numpy as np
 
 from neuroeco.application.configs import ResolvedConfig
 from neuroeco.application.evaluation import EpisodeIdentity, EpisodeResult, run_episode
+from neuroeco.application.metrics import EARLY_CAPTURE_FRACTION_OF_T_MAX
 from neuroeco.application.seeding import Purpose, SeedRegistry, Stream, make_key
 from neuroeco.application.session import initial_world
 from neuroeco.domain.geometry import pairwise_distances
@@ -44,7 +51,7 @@ from neuroeco.domain.params import (
 )
 from neuroeco.domain.policies import PROBE_NAMES, Policy
 from neuroeco.domain.simulator import StepTrace
-from neuroeco.domain.state import DeathCause, SpeciesState, WorldState
+from neuroeco.domain.state import NOT_DEAD, DeathCause, SpeciesState, WorldState
 
 PILOT_NAME = "P1"
 SCENARIOS = ("A", "B", "C")
@@ -922,3 +929,214 @@ def _run_task(
         result=result,
         steps_checked=checker.steps_checked,
     )
+
+
+# ---------------------------------------------------------------- result rows (F4 T3)
+
+STAGE_SCENARIOS: Mapping[str, tuple[str, ...]] = {"A": ("A",), "B": ("A", "B"), "C": ("A", "C")}
+ENTRY_STAGE = "entry"
+CONFIRMATION_STAGE = "confirmation"
+ROW_STAGES = (*STAGES, ENTRY_STAGE, CONFIRMATION_STAGE)
+
+
+def stage_scenarios(stage: str) -> tuple[str, ...]:
+    """Scenarios executed by an iteration of ``stage`` (P1-18): A; A and B; A and C."""
+    if stage not in STAGE_SCENARIOS:
+        raise ValueError(f"stage must be one of {STAGES}, got {stage!r}")
+    return STAGE_SCENARIOS[stage]
+
+
+def check_block_groups(tasks: Sequence[EpisodeTask], spec: P1Spec, block: str) -> None:
+    """Independent check that every task belongs to ``block`` of ``spec`` (D16, T3-9).
+
+    It does not trust the block label alone: the seed group and the item of every task must be
+    those that the specification assigns to its scenario in that block.
+    """
+    if not tasks:
+        raise ValueError("the block has no episodes to run")
+    block_spec = spec.blocks.named()[block]
+    seen: set[tuple[str, str, int]] = set()
+    for task in tasks:
+        if task.block != block:
+            raise ValueError(f"{task.label}: task of block {task.block!r}, expected {block!r}")
+        expected = block_spec.seed_groups.for_scenario(task.scenario)
+        if task.seed_group != expected:
+            raise ValueError(
+                f"{task.label}: seed_group {task.seed_group} is not the group {expected} of "
+                f"scenario {task.scenario} in block {block}"
+            )
+        if not 0 <= task.item < block_spec.episodes:
+            raise ValueError(f"{task.label}: item outside 0..{block_spec.episodes - 1}")
+        identity = (task.scenario, task.condition.name, task.item)
+        if identity in seen:
+            raise ValueError(f"{task.label}: episode planned twice")
+        seen.add(identity)
+
+
+EPISODE_COLUMN_TYPES: tuple[tuple[str, str], ...] = (
+    ("block", "str"),
+    ("stage", "str"),
+    ("iteration", "int"),
+    ("scenario", "str"),
+    ("condition", "str"),
+    *((name, "int") for name in KEY_COLUMNS),
+    ("config_hash", "str"),
+    ("plant_energy", "float"),
+    ("regrow_delay", "int"),
+    ("n_plants_a", "int"),
+    ("n_plants_b", "int"),
+    ("n_predators_c", "int"),
+    ("prey_flee_threshold", "float"),
+    ("prey_cruise_fraction", "float"),
+    ("predator_cruise_fraction", "float"),
+    ("t_max", "int"),
+    ("n_prey", "int"),
+    ("n_predators", "int"),
+    ("n_plants", "int"),
+    ("steps", "int"),
+    ("prey_survival_numerator", "int"),
+    ("prey_survival_denominator", "int"),
+    ("prey_alive_end", "int"),
+    ("prey_captured", "int"),
+    ("prey_starved", "int"),
+    ("plants_eaten", "int"),
+    ("exposure", "int"),
+    ("early_captures", "int"),
+    ("prey_net_energy_rate", "float"),
+    ("predators_alive_end", "int"),
+    ("predators_starved", "int"),
+    ("predators_reaching_half", "int"),
+    ("predators_censored_before_half", "int"),
+    ("predators_censored_after_half", "int"),
+    ("predators_alive_at_t_max", "int"),
+    ("predators_alive_at_t_max_below_two_captures", "int"),
+)
+EPISODE_COLUMNS = tuple(name for name, _ in EPISODE_COLUMN_TYPES)
+
+
+def float_text(value: float) -> str:
+    """Deterministic text of a finite float: the shortest repr that round-trips exactly."""
+    number = float(value)
+    if not math.isfinite(number):
+        raise ValueError(f"a CSV value must be finite, got {value!r} (D14)")
+    return repr(number)
+
+
+def _count(mask: np.ndarray) -> int:
+    return int(np.count_nonzero(mask))
+
+
+def episode_row(
+    outcome: EpisodeOutcome,
+    world: WorldParams,
+    *,
+    stage: str,
+    iteration: int,
+    values: CandidateValues,
+) -> dict[str, int | str]:
+    """One ``episodes.csv`` row: identification, keys, values and integer outcomes (P1-16).
+
+    Only exact integers and finite floats are written; nothing is aggregated here. B3 and B6
+    use the individual survival of each predator (D2, D3): t_i is the death step, or ``steps``
+    for a predator alive at the end; an episode ending before ``t_max`` censors the survivors.
+    """
+    if stage not in ROW_STAGES:
+        raise ValueError(f"stage must be one of {ROW_STAGES}, got {stage!r}")
+    task, record, metrics = outcome.task, outcome.result.record, outcome.result.metrics
+    prey, predators = record.prey, record.predators
+    if (record.t_max, prey.death_step.size, predators.death_step.size) != (
+        world.t_max,
+        world.n_prey,
+        world.n_predators,
+    ):
+        raise ValueError(f"{task.label}: the record does not match the resolved configuration")
+    t_max, steps = record.t_max, record.steps
+
+    predator_alive = predators.death_step == NOT_DEAD
+    predator_survival = np.where(predator_alive, steps, predators.death_step)
+    censored = predator_alive & (steps < t_max)
+    alive_at_t_max = predator_alive & (steps == t_max)
+    early_limit = EARLY_CAPTURE_FRACTION_OF_T_MAX * t_max
+
+    row: dict[str, int | str] = {
+        "block": task.block,
+        "stage": stage,
+        "iteration": iteration,
+        "scenario": task.scenario,
+        "condition": task.condition.name,
+        **outcome.key_columns,
+        "config_hash": outcome.config_hash,
+        "plant_energy": float_text(values.plant_energy),
+        "regrow_delay": values.regrow_delay,
+        "n_plants_a": values.n_plants_a,
+        "n_plants_b": values.n_plants_b,
+        "n_predators_c": values.n_predators_c,
+        "prey_flee_threshold": float_text(values.prey_flee_threshold),
+        "prey_cruise_fraction": float_text(values.prey_cruise_fraction),
+        "predator_cruise_fraction": float_text(values.predator_cruise_fraction),
+        "t_max": t_max,
+        "n_prey": world.n_prey,
+        "n_predators": world.n_predators,
+        "n_plants": world.n_plants,
+        "steps": steps,
+        "prey_survival_numerator": metrics.prey_survival.numerator,
+        "prey_survival_denominator": metrics.prey_survival.denominator,
+        "prey_alive_end": _count(prey.death_step == NOT_DEAD),
+        "prey_captured": _count(prey.death_cause == DeathCause.CAPTURED),
+        "prey_starved": _count(prey.death_cause == DeathCause.STARVATION),
+        "plants_eaten": metrics.plants_eaten,
+        "exposure": metrics.capture_rate_per_exposure.denominator,
+        "early_captures": _count(record.capture_step < early_limit),
+        "prey_net_energy_rate": float_text(metrics.prey_net_energy_rate),
+        "predators_alive_end": _count(predator_alive),
+        "predators_starved": _count(predators.death_cause == DeathCause.STARVATION),
+        "predators_reaching_half": _count(2 * predator_survival >= t_max),
+        "predators_censored_before_half": _count(censored & (2 * steps < t_max)),
+        "predators_censored_after_half": _count(censored & (2 * steps >= t_max)),
+        "predators_alive_at_t_max": _count(alive_at_t_max),
+        "predators_alive_at_t_max_below_two_captures": _count(
+            alive_at_t_max & (predators.events < 2)
+        ),
+    }
+    if tuple(row) != EPISODE_COLUMNS:
+        raise RuntimeError("episode row columns do not match EPISODE_COLUMNS")
+    if row["prey_captured"] != metrics.captures:
+        raise RuntimeError(f"{task.label}: captured prey and capture events disagree")
+    return row
+
+
+COMPARISON_SCENARIOS: Mapping[Comparison, tuple[str, ...]] = {
+    Comparison.A6_B_VS_A: ("A", "B"),
+    Comparison.A6_C_VS_A: ("A", "C"),
+    Comparison.B2_PREY_A: ("A",),
+    Comparison.B2_PREY_B: ("B",),
+    Comparison.B2_PREY_C: ("C",),
+    Comparison.B2_PREDATOR_A: ("A",),
+    Comparison.B2_PREDATOR_B: ("B",),
+    Comparison.B2_PREDATOR_C: ("C",),
+}
+KEY_FIELDS = ("purpose", "seed_group", "run", "generation", "item", "stream")
+BOOTSTRAP_COLUMNS = ("comparison", "comparison_name", "project_seed", *KEY_FIELDS)
+
+
+def bootstrap_rows(
+    block: BlockSpec, run: int, scenarios: Sequence[str], project_seed: int
+) -> list[dict[str, int | str]]:
+    """``bootstrap_keys.csv`` rows (P1-20): the comparisons whose scenarios were executed.
+
+    ``project_seed`` is written as text: it has 128 bits (ADR-023, explicit types).
+    """
+    executed = {_scenario(s) for s in scenarios}
+    rows: list[dict[str, int | str]] = []
+    for comparison in Comparison:
+        if set(COMPARISON_SCENARIOS[comparison]) <= executed:
+            key = bootstrap_key(block, run, comparison)
+            rows.append(
+                {
+                    "comparison": int(comparison),
+                    "comparison_name": comparison.name,
+                    "project_seed": str(project_seed),
+                    **dict(zip(KEY_FIELDS, key, strict=True)),
+                }
+            )
+    return rows

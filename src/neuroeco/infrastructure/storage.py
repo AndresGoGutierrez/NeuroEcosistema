@@ -11,7 +11,7 @@ import datetime as dt
 import json
 import os
 import uuid
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -62,3 +62,50 @@ def new_run_directory(root: Path, now: dt.datetime) -> Path:
             continue
         return candidate
     raise RuntimeError(f"could not create a unique run directory under {root}")
+
+
+def _unique_sibling(target: Path, label: str, create: Callable[[Path], None]) -> Path:
+    for _ in range(RUN_DIRECTORY_ATTEMPTS):
+        candidate = target.with_name(f"{target.name}.{label}-{uuid.uuid4().hex[:8]}")
+        if candidate.exists():
+            continue
+        try:
+            create(candidate)
+        except FileExistsError:
+            continue
+        return candidate
+    raise RuntimeError(f"could not create a unique {label} directory next to {target}")
+
+
+def create_partial_directory(target: Path) -> Path:
+    """Create ``<target>.partial-<8 hex>`` next to ``target``, which must not exist yet.
+
+    Results are assembled there and only appear under ``target`` when complete
+    (``publish_directory``); an existing ``target`` is never overwritten.
+    """
+    if target.exists():
+        raise FileExistsError(f"{target} already exists; results are never overwritten")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    return _unique_sibling(target, "partial", lambda path: path.mkdir())
+
+
+def publish_directory(partial: Path, target: Path) -> None:
+    """Make a completed ``partial`` directory visible as ``target`` in one rename."""
+    if target.exists():
+        raise FileExistsError(f"{target} already exists; results are never overwritten")
+    os.rename(partial, target)
+
+
+def reserve_failure_directory(target: Path, now: dt.datetime, source: Path | None = None) -> Path:
+    """``<target>.failed-<YYYYMMDDTHHMMSSZ>-<8 hex>``, unique; never the result directory.
+
+    With ``source`` (a partial directory) the failure directory is that directory renamed;
+    otherwise a new empty one is created.
+    """
+    if now.utcoffset() != dt.timedelta(0):
+        raise ValueError("failure directories are named in UTC; pass an aware UTC datetime")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    label = f"failed-{now.strftime('%Y%m%dT%H%M%SZ')}"
+    if source is None:
+        return _unique_sibling(target, label, lambda path: path.mkdir())
+    return _unique_sibling(target, label, lambda path: os.rename(source, path))

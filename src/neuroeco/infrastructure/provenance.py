@@ -7,11 +7,13 @@ The full manifest (BLAS thread pools, seeds, run directory) arrives in later pha
 from __future__ import annotations
 
 import datetime as dt
+import hashlib
 import os
 import platform
 import subprocess
 import sys
 from collections.abc import Sequence
+from importlib import metadata
 from pathlib import Path
 from typing import Any
 
@@ -47,3 +49,23 @@ def collect_provenance(command: Sequence[str], cwd: Path, config_hash: str) -> d
             for name in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS")
         },
     }
+
+
+def file_sha256(path: Path) -> str:
+    """SHA-256 of a file's bytes (specifications and ``uv.lock`` in the P1 provenance)."""
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1 << 16), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def dependency_versions(names: Sequence[str]) -> dict[str, str | None]:
+    """Installed versions read from package metadata, without importing the packages."""
+    versions: dict[str, str | None] = {}
+    for name in names:
+        try:
+            versions[name] = metadata.version(name)
+        except metadata.PackageNotFoundError:
+            versions[name] = None
+    return versions
