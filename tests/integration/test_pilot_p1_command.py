@@ -262,7 +262,7 @@ def test_state_k_rejects_a_candidate_without_running(setup) -> None:
     # the rejected candidate is documented in its own failure record (T3b, M-5)
     assert failure["mode"]["values"]["plant_energy"] == 60.0
     assert failure["mode"]["values_source"]["sha256"]
-    assert set(failure["git"]) == {"commit", "dirty", "upstream", "upstream_commit"}
+    assert set(failure["git"]) == {"commit", "dirty", "upstream", "upstream_commit", "remote_url"}
 
 
 def test_invalid_static_sequence_is_refused(setup) -> None:

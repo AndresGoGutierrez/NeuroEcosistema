@@ -1,4 +1,4 @@
-"""Command ``neuroeco pilot p1``: one block of the P1 calibration (ADR-020, ADR-033; F4 T3, T3b).
+"""Command ``neuroeco pilot p1``: one block of the P1 calibration (ADR-020, ADR-033; F4 T3-T3c).
 
 Modes (exactly one per invocation, T3-1):
 
@@ -14,15 +14,20 @@ Before any episode the command validates, in this order:
 1. the P1 specification, and the approved seed groups and sizes if it declares real groups;
 2. every registered iteration and round specification (strict file names) and their static
    sequence;
-3. earlier attempts at the same destination (D18) and the completed results this mode needs
+3. no new iteration once the entry evaluation exists or a confirmation started (Mn-6);
+   earlier attempts at the same destination (D18); and the completed results this mode needs
    (iteration N needs 1..N-1; the entry evaluation the whole chain; the confirmation the entry
-   evaluation; the second confirmation the first one, followed by a recalibration);
+   evaluation; the second confirmation the first one, followed by a recalibration), each with
+   the same configuration files, intact CSV files and the planned rows;
 4. the resolved configurations and state K (A1);
 5. the exact plan of the block (seed groups, conditions, items and overrides);
 6. the author's authorization for confirmation blocks, and that the destination does not exist;
-7. after capturing the provenance and before writing anything (P1-19): a clean git working tree,
-   every file read and the output root inside the repository and tracked by git, and HEAD
-   synchronized with its upstream branch (pushed).
+7. after capturing the provenance and before writing anything (P1-19): a clean git working
+   tree; no file hidden with assume-unchanged or skip-worktree; every tracked file, code
+   included, equal to HEAD (``git hash-object``) and the running package inside the repository;
+   every file read inside the repository and tracked; the canonical paths with real seed
+   groups; an output root inside the repository and not ignored; and HEAD synchronized with a
+   remote-tracking upstream branch (pushed).
 
 There is no option to bypass these checks.
 
@@ -50,6 +55,7 @@ from typing import Annotated, Any
 
 import typer
 
+import neuroeco
 from neuroeco.application.calibration import (
     BOOTSTRAP_COLUMNS,
     CONFIRMATION_BLOCKS,
@@ -58,6 +64,7 @@ from neuroeco.application.calibration import (
     ENTRY_EVALUATION_RUN,
     ENTRY_STAGE,
     EPISODE_COLUMNS,
+    REAL_SEED_GROUPS,
     SCENARIOS,
     A2ViolationError,
     CandidateValues,
@@ -91,9 +98,14 @@ from neuroeco.infrastructure.provenance import (
     collect_provenance,
     dependency_versions,
     file_sha256,
+    git_content_overrides,
+    git_head_mismatches,
+    git_hidden_changes,
+    git_ignored,
     git_state,
     git_toplevel,
     git_untracked,
+    git_upstream,
     is_inside,
 )
 from neuroeco.infrastructure.storage import (
@@ -278,9 +290,18 @@ def _read_json(path: Path) -> Any:
 
 
 def _attempt(directory: Path) -> dict[str, Any]:
-    """Classify one ``.failed-`` directory: a failure record, an interrupted run or unknown."""
+    """Classify the directory of an earlier attempt: failure record, interrupted run or unknown.
+
+    The command writes ``failure.json`` (and the failed provenance) inside the partial directory
+    before it tries to rename it (T3c, IA-2), so an A2 violation keeps its evidence even when
+    the rename fails. A directory without ``failure.json`` whose provenance is still
+    ``running`` is an interruption that left no record (power cut, killed process). Either
+    record can declare an A2 violation; any doubt makes the attempt ``unrecognized``.
+    """
     record = {"directory": directory.name}
     failure = _read_json(directory / FAILURE_FILE)
+    provenance = _read_json(directory / PROVENANCE_FILE)
+    provenance_a2 = isinstance(provenance, dict) and provenance.get("a2_violation") is True
     if isinstance(failure, dict) and failure.get("schema") == FAILURE_SCHEMA:
         return {
             **record,
@@ -288,15 +309,16 @@ def _attempt(directory: Path) -> dict[str, Any]:
             "phase": failure.get("phase"),
             "error_type": failure.get("error_type"),
             "timestamp_utc": failure.get("timestamp_utc"),
-            "a2_violation": failure.get("a2_violation") is not None,
+            "a2_violation": failure.get("a2_violation") is not None or provenance_a2,
         }
-    if not (directory / FAILURE_FILE).exists():
-        provenance = _read_json(directory / PROVENANCE_FILE)
-        if isinstance(provenance, dict) and provenance.get("status") == "running":
-            # A recovered partial directory (power cut, killed process): an infrastructure
-            # failure by construction, since an A2 violation is always recorded by the command.
-            return {**record, "kind": "interrupted", "a2_violation": False}
-    return {**record, "kind": "unrecognized", "a2_violation": None}
+    if (
+        not (directory / FAILURE_FILE).exists()
+        and isinstance(provenance, dict)
+        and provenance.get("status") == "running"
+        and provenance.get("a2_violation") is None
+    ):
+        return {**record, "kind": "interrupted", "a2_violation": False}
+    return {**record, "kind": "unrecognized", "a2_violation": True if provenance_a2 else None}
 
 
 def list_attempts(destination: Path, exclude: Path | None = None) -> list[dict[str, Any]]:
@@ -304,13 +326,44 @@ def list_attempts(destination: Path, exclude: Path | None = None) -> list[dict[s
     parent, prefix = destination.parent, glob.escape(destination.name)
     if not parent.is_dir():
         return []
-    attempts: list[dict[str, Any]] = [
-        {"directory": p.name, "kind": "partial", "a2_violation": None}
-        for p in sorted(parent.glob(prefix + ".partial-*"))
-        if exclude is None or p.name != exclude.name
-    ]
+    attempts: list[dict[str, Any]] = []
+    for path in sorted(parent.glob(prefix + ".partial-*")):
+        if exclude is None or path.name != exclude.name:
+            # A partial directory never counts as clean: it must be recovered first (M-8).
+            found = _attempt(path)
+            attempts.append({**found, "kind": "partial", "recorded_kind": found["kind"]})
     attempts.extend(_attempt(p) for p in sorted(parent.glob(prefix + ".failed-*")))
     return attempts
+
+
+CONFIRMATION_DESTINATIONS = (
+    ("confirmation", CONFIRMATION_LEAF),
+    ("second_confirmation", CONFIRMATION_LEAF),
+)
+
+
+def check_no_recalibration(mode: Mode, output_root: Path) -> None:
+    """No new iteration once the entry evaluation exists or a confirmation started (Mn-6).
+
+    T3c (decision Mn-7 of the author): recalibrating, or repeating the entry evaluation, after
+    the confirmation started is not allowed while no methodological flow is approved. There is
+    no option to bypass this check.
+    """
+    if mode.name != "iteration":
+        return
+    started = []
+    entry = output_root / CALIBRATION_BLOCK / ENTRY_LEAF
+    if entry.exists():
+        started.append(entry.as_posix())
+    for block, leaf in CONFIRMATION_DESTINATIONS:
+        destination = output_root / block / leaf
+        if destination.exists() or list_attempts(destination):
+            started.append(destination.as_posix())
+    if started:
+        raise P1RefusalError(
+            f"{started} exist: no calibration iteration runs after the entry evaluation or once "
+            "a confirmation started; no recalibration flow is approved (T3c, Mn-6, Mn-7)"
+        )
 
 
 def check_attempts(mode: Mode, destination: Path, output_root: Path) -> list[dict[str, Any]]:
@@ -338,7 +391,11 @@ def check_attempts(mode: Mode, destination: Path, output_root: Path) -> list[dic
         )
     if mode.name == "second_confirmation":
         first = list_attempts(output_root / "confirmation" / CONFIRMATION_LEAF)
-        blocked = [a["directory"] for a in first if a["a2_violation"] is not False]
+        blocked = [
+            a["directory"]
+            for a in first
+            if a["a2_violation"] is not False or a["kind"] == "partial"
+        ]
         if blocked:
             raise P1RefusalError(
                 f"first-confirmation attempt(s) {blocked} stopped on an A2 violation, or have no "
@@ -357,19 +414,40 @@ def _field(data: Mapping[str, Any], dotted: str) -> Any:
     return value
 
 
-def _csv_rows(path: Path) -> tuple[list[str], int]:
+ROW_IDENTITY = ("block", "stage", "iteration", "scenario", "condition", "seed_group", "item")
+
+
+def _csv_rows(path: Path) -> tuple[list[str], list[dict[str, str]]]:
     with path.open(encoding="utf-8", newline="") as handle:
-        reader = csv.reader(handle)
-        header = next(reader, [])
-        return header, sum(1 for _ in reader)
+        reader = csv.DictReader(handle)
+        rows = list(reader)
+        return list(reader.fieldnames or []), rows
 
 
-def verify_result(directory: Path, expected: Mapping[str, Any]) -> tuple[dict, list[Path]]:
+def _expected_identities(spec: P1Spec, data: Mapping[str, Any]) -> list[tuple[str, ...]]:
+    """Row identities of a published block, rebuilt from its provenance and the P1 spec."""
+    try:
+        values = CandidateValues(**data["values"])
+        tasks = plan_block(spec, data["block"], values, scenarios=tuple(data["scenarios"]))
+    except (KeyError, TypeError, ValueError) as error:
+        raise P1RefusalError(f"the provenance cannot rebuild its plan: {error}") from error
+    stage, iteration = str(data.get("stage")), str(data.get("iteration"))
+    return [
+        (t.block, stage, iteration, t.scenario, t.condition.name, str(t.seed_group), str(t.item))
+        for t in tasks
+    ]
+
+
+def verify_result(
+    directory: Path, expected: Mapping[str, Any], spec: P1Spec
+) -> tuple[dict, list[Path]]:
     """A published, completed result with the expected identity; returns it and its files.
 
     Checks only the existence and integrity of the result, never the value of a criterion
-    (that is task T4b): status ``completed``, mode, block, iteration and values, every planned
-    episode written and present in ``episodes.csv``, and ``bootstrap_keys.csv``.
+    (that is task T4b): status ``completed``; mode, block, iteration, values and the hashes of
+    the configuration files; every planned episode written; the SHA-256 of ``episodes.csv`` and
+    ``bootstrap_keys.csv`` recorded at publication (T3c, Mn-4); and the identity of every row
+    (block, stage, iteration, scenario, condition, seed group and item) in the planned order.
     """
     label = directory.as_posix()
     provenance_path = directory / PROVENANCE_FILE
@@ -387,26 +465,43 @@ def verify_result(directory: Path, expected: Mapping[str, Any]) -> tuple[dict, l
     if type(planned) is not int or planned < 1 or written != planned:
         raise P1RefusalError(f"{label}: {written!r} of {planned!r} planned episodes written")
     episodes, keys = directory / EPISODES_FILE, directory / BOOTSTRAP_FILE
+    recorded = data.get("result_files")
     for path in (episodes, keys):
         if not path.is_file():
             raise P1RefusalError(f"{label}: {path.name} is missing")
+        if not isinstance(recorded, dict) or recorded.get(path.name) != file_sha256(path):
+            raise P1RefusalError(
+                f"{label}: {path.name} does not match the SHA-256 recorded at publication"
+            )
     header, rows = _csv_rows(episodes)
-    if tuple(header) != EPISODE_COLUMNS or rows != written:
+    if tuple(header) != EPISODE_COLUMNS or len(rows) != written:
         raise P1RefusalError(
-            f"{label}: {EPISODES_FILE} has {rows} rows (expected {written}) or wrong columns"
+            f"{label}: {EPISODES_FILE} has {len(rows)} rows (expected {written}) or wrong columns"
         )
+    identities = [tuple(row[name] for name in ROW_IDENTITY) for row in rows]
+    if identities != _expected_identities(spec, data):
+        raise P1RefusalError(f"{label}: the rows of {EPISODES_FILE} are not the planned episodes")
     return data, [provenance_path, episodes, keys]
 
 
 def check_prerequisites(
-    mode: Mode, registry: Registry, output_root: Path
+    mode: Mode,
+    registry: Registry,
+    output_root: Path,
+    spec: P1Spec,
+    config_files: Mapping[str, str],
 ) -> tuple[list[dict[str, Any]], list[Path]]:
-    """The completed results that must precede this mode, with their specification hashes."""
+    """The completed results that must precede this mode, with their specification hashes.
+
+    Every prerequisite must have been produced with exactly the same configuration files
+    (``config_files``: SHA-256 of p1.yaml, p0.yaml, base.yaml, scenarios.yaml and
+    baselines.yaml), so no parameter outside the candidate can change along the chain (IA-3).
+    """
     records: list[dict[str, Any]] = []
     files: list[Path] = []
 
     def need(directory: Path, expected: Mapping[str, Any]) -> dict:
-        data, paths = verify_result(directory, expected)
+        data, paths = verify_result(directory, {**expected, "config_files": config_files}, spec)
         records.append(
             {
                 "directory": directory.as_posix(),
@@ -474,6 +569,8 @@ class Preflight:
     prerequisites: list[dict[str, Any]]
     attempts: list[dict[str, Any]]
     inputs: list[Path]
+    config_files: dict[str, str]  # SHA-256 of the five configuration files (IA-3)
+    real_groups: bool  # the specification declares real P1 seed groups (10-32)
 
 
 def preflight(
@@ -484,7 +581,7 @@ def preflight(
     destination: Path,
     output_root: Path,
 ) -> Preflight:
-    """Validations that need no result value, in the order approved by the author (T3, T3b)."""
+    """Validations that need no result value, in the order approved by the author (T3-T3c)."""
     p0_path = config_dir / "pilots" / "p0.yaml"
     p0 = load_p0_spec(p0_path)
     spec = load_p1_spec(spec_path, {"exploratory": EXPLORATORY_SEED_GROUP, "P0": p0.seed_group})
@@ -492,6 +589,15 @@ def preflight(
         check_approved_seed_groups(spec)
     except ValueError as error:
         raise P1RefusalError(str(error)) from error
+    real_groups = any(g in REAL_SEED_GROUPS for g in spec.declared_seed_groups().values())
+    config_paths = {
+        "p1_spec": spec_path,
+        "p0_spec": p0_path,
+        "base": config_dir / BASE_FILE,
+        "scenarios": config_dir / SCENARIOS_FILE,
+        "baselines": config_dir / BASELINES_FILE,
+    }
+    config_files = {name: file_sha256(path) for name, path in config_paths.items()}
 
     registry = load_registry(spec_path)
     current = _registered(mode.source, registry)
@@ -510,8 +616,11 @@ def preflight(
         reference.world.n_predators,
     )
 
+    check_no_recalibration(mode, output_root)
     attempts = check_attempts(mode, destination, output_root)
-    prerequisites, result_files = check_prerequisites(mode, registry, output_root)
+    prerequisites, result_files = check_prerequisites(
+        mode, registry, output_root, spec, config_files
+    )
 
     candidate = {
         s: load_config(config_dir, s, scenario_overrides(mode.values, s)) for s in SCENARIOS
@@ -543,26 +652,63 @@ def preflight(
         raise P1RefusalError(f"{destination} already exists; results are never overwritten")
 
     inputs = [
-        spec_path,
-        p0_path,
-        *(config_dir / name for name in (BASE_FILE, SCENARIOS_FILE, BASELINES_FILE)),
+        *config_paths.values(),
         *(path for path, _ in registry.iterations),
         *(path for path, _ in registry.rounds),
         *result_files,
     ]
     return Preflight(
-        spec, registry, configs, tasks, state_k, seeds.pop(), prerequisites, attempts, inputs
+        spec,
+        registry,
+        configs,
+        tasks,
+        state_k,
+        seeds.pop(),
+        prerequisites,
+        attempts,
+        inputs,
+        config_files,
+        real_groups,
     )
 
 
-# ---------------------------------------------------------------- git checks (P1-19, T3b)
+# ---------------------------------------------------------------- git checks (P1-19, T3b, T3c)
 
 
-def repository_checks(cwd: Path, inputs: Sequence[Path], output_root: Path) -> dict[str, Any]:
-    """What git says about the files read and the output root; never trusts the paths alone.
+def package_directory() -> Path:
+    """Directory of the ``neuroeco`` package that is running (its code must be the commit's)."""
+    return Path(neuroeco.__file__).resolve().parent
 
-    Combined with a clean working tree, "inside the repository and tracked" means that every
-    file read has exactly the content of the commit HEAD (P1-19).
+
+def destination_files(destination: Path) -> list[Path]:
+    """Files the command may write for ``destination``; none of them may be ignored by git."""
+    failed = destination.with_name(f"{destination.name}.failed-00000000T000000Z-00000000")
+    partial = destination.with_name(f"{destination.name}.partial-00000000")
+    return [
+        *(destination / name for name in (EPISODES_FILE, BOOTSTRAP_FILE, PROVENANCE_FILE)),
+        *(directory / name for directory in (failed, partial) for name in (FAILURE_FILE,)),
+        failed / PROVENANCE_FILE,
+    ]
+
+
+def repository_checks(
+    cwd: Path,
+    inputs: Sequence[Path],
+    output_root: Path,
+    destination: Path,
+    spec_path: Path,
+    config_dir: Path,
+) -> dict[str, Any]:
+    """What git says about the code, the files read and the output root (P1-19; T3b, T3c).
+
+    It never trusts the paths or ``git status`` alone:
+
+    - every file read is inside the repository and tracked;
+    - no tracked file is marked assume-unchanged or skip-worktree (IA-1);
+    - every tracked file, code included, has exactly the content of HEAD, compared with
+      ``git hash-object`` (IA-1), and the running ``neuroeco`` package is inside the repository;
+    - the destination files are not ignored by git (Mn-3);
+    - the upstream is a remote-tracking branch with the commit of HEAD (M-1, Mn-1).
     """
     root = git_toplevel(cwd)
     if root is None:
@@ -570,34 +716,81 @@ def repository_checks(cwd: Path, inputs: Sequence[Path], output_root: Path) -> d
             "root": None,
             "outside_repository": [p.as_posix() for p in inputs],
             "untracked": None,
+            "hidden_changes": None,
+            "content_overrides": None,
+            "head_mismatches": None,
+            "package_inside": False,
+            "canonical_paths": False,
             "output_root_inside": False,
+            "ignored_outputs": None,
             "head": None,
             "upstream": None,
+            "upstream_full_ref": None,
+            "remote": None,
+            "remote_url": None,
             "upstream_commit": None,
             "synchronized": False,
         }
     inside = [p for p in inputs if is_inside(p, root)]
     untracked = git_untracked(inside, root)
+    output_inside = is_inside(output_root, root)
+    ignored = git_ignored(destination_files(destination), root) if output_inside else None
     state = git_state(root)
+    upstream = git_upstream(root)
+    canonical = (
+        spec_path.resolve() == (root / "configs" / "pilots" / "p1.yaml").resolve()
+        and config_dir.resolve() == (root / "configs").resolve()
+        and output_root.resolve() == (root / DEFAULT_OUTPUT_ROOT).resolve()
+    )
     return {
         "root": root.as_posix(),
         "outside_repository": [p.as_posix() for p in inputs if p not in inside],
         "untracked": None if untracked is None else [p.as_posix() for p in untracked],
-        "output_root_inside": is_inside(output_root, root),
+        "hidden_changes": git_hidden_changes(root),
+        "content_overrides": git_content_overrides(root),
+        "head_mismatches": git_head_mismatches(root),
+        "package_inside": is_inside(package_directory(), root),
+        "canonical_paths": canonical,
+        "output_root_inside": output_inside,
+        "ignored_outputs": ignored,
         "head": state["commit"],
-        "upstream": state["upstream"],
-        "upstream_commit": state["upstream_commit"],
-        "synchronized": state["commit"] is not None and state["commit"] == state["upstream_commit"],
+        "upstream": upstream["ref"],
+        "upstream_full_ref": upstream["full_ref"],
+        "remote": upstream["remote"],
+        "remote_url": upstream["remote_url"],
+        "upstream_commit": upstream["commit"],
+        "synchronized": state["commit"] is not None and state["commit"] == upstream["commit"],
     }
 
 
-def refuse_on_git(base: Mapping[str, Any], checks: Mapping[str, Any]) -> None:
+def refuse_on_git(base: Mapping[str, Any], checks: Mapping[str, Any], *, real_groups: bool) -> None:
     if base.get("git_dirty") is not False:
         raise P1RefusalError(
             f"the git working tree must be clean (P1-19); git_dirty = {base.get('git_dirty')!r}"
         )
     if checks["root"] is None:
         raise P1RefusalError("the command must run inside the git repository (P1-19)")
+    if any(checks[k] is None for k in ("hidden_changes", "content_overrides", "head_mismatches")):
+        raise P1RefusalError("git could not compare the working tree with HEAD (P1-19)")
+    if checks["content_overrides"]:
+        raise P1RefusalError(
+            f"local git settings can disguise modified content as HEAD: "
+            f"{checks['content_overrides']} (P1-19, T3c IA-1)"
+        )
+    if checks["hidden_changes"]:
+        raise P1RefusalError(
+            f"files marked assume-unchanged or skip-worktree: {checks['hidden_changes']}; git "
+            "status does not look at them (P1-19, T3c IA-1)"
+        )
+    if checks["head_mismatches"]:
+        raise P1RefusalError(
+            f"files whose content differs from HEAD: {checks['head_mismatches']} (P1-19, T3c IA-1)"
+        )
+    if not checks["package_inside"]:
+        raise P1RefusalError(
+            "the running neuroeco package is not the one of this repository: the provenance "
+            "would not identify the code that runs (P1-19, T3c IA-1)"
+        )
     if checks["outside_repository"]:
         raise P1RefusalError(
             f"files outside the repository: {checks['outside_repository']}; every specification "
@@ -607,10 +800,32 @@ def refuse_on_git(base: Mapping[str, Any], checks: Mapping[str, Any]) -> None:
         raise P1RefusalError("git could not list the tracked files (P1-19)")
     if checks["untracked"]:
         raise P1RefusalError(f"files not tracked by git: {checks['untracked']} (P1-19)")
+    if real_groups and not checks["canonical_paths"]:
+        raise P1RefusalError(
+            "with the real P1 seed groups the specification must be configs/pilots/p1.yaml, "
+            "the configuration directory configs/ and the output root results/pilots/p1 of the "
+            "repository (T3c, IA-3)"
+        )
     if not checks["output_root_inside"]:
         raise P1RefusalError("the output root must be inside the repository (P1-19)")
+    if checks["ignored_outputs"] is None:
+        raise P1RefusalError("git could not check the ignore rules of the output root (P1-19)")
+    if checks["ignored_outputs"]:
+        raise P1RefusalError(
+            f"git ignores result files: {checks['ignored_outputs']}; results and failure "
+            "records must be versioned (P1-19, T3c Mn-3)"
+        )
     if checks["upstream"] is None:
         raise P1RefusalError("HEAD has no upstream branch: push the specification first (P1-19)")
+    if (
+        not (checks["upstream_full_ref"] or "").startswith("refs/remotes/")
+        or not checks["remote_url"]
+    ):
+        raise P1RefusalError(
+            f"the upstream {checks['upstream']!r} is not a remote-tracking branch of a remote "
+            f"with a URL ({checks['upstream_full_ref']!r}): nothing would be published "
+            "(P1-19, T3c Mn-1)"
+        )
     if not checks["synchronized"]:
         raise P1RefusalError(
             f"HEAD {checks['head']} is not synchronized with {checks['upstream']} "
@@ -672,6 +887,10 @@ def provenance_document(
         "registered_rounds": [
             {"path": p.as_posix(), "sha256": file_sha256(p)} for p, _ in plan.registry.rounds
         ],
+        "config_files": plan.config_files,
+        "input_files": [
+            {"path": p.as_posix(), "sha256": file_sha256(p)} for p in dict.fromkeys(plan.inputs)
+        ],
         "prerequisites": plan.prerequisites,
         "previous_attempts": plan.attempts,
         "git_checks": None,
@@ -705,6 +924,8 @@ def provenance_document(
         "duration_seconds": None,
         "episodes_written": None,
         "episodes_discarded": None,
+        "result_files": None,
+        "a2_violation": None,
     }
 
 
@@ -753,7 +974,9 @@ def failure_document(
     }
 
 
-def failed_provenance(provenance: Mapping[str, Any], discarded: int) -> dict[str, Any]:
+def failed_provenance(
+    provenance: Mapping[str, Any], discarded: int, *, a2_violation: bool
+) -> dict[str, Any]:
     """The provenance of a failed block: nothing was published, every episode was discarded."""
     return {
         **provenance,
@@ -762,7 +985,24 @@ def failed_provenance(provenance: Mapping[str, Any], discarded: int) -> dict[str
         "duration_seconds": None,
         "episodes_written": None,
         "episodes_discarded": discarded,
+        "result_files": None,
+        "a2_violation": a2_violation,
     }
+
+
+def _write_records(
+    directory: Path, provenance: dict[str, Any] | None, failure: dict[str, Any]
+) -> None:
+    replace_json(directory / FAILURE_FILE, failure)  # first: the evidence that matters most
+    if provenance is not None:
+        replace_json(
+            directory / PROVENANCE_FILE,
+            failed_provenance(
+                provenance,
+                failure["episodes_completed"],
+                a2_violation=failure["a2_violation"] is not None,
+            ),
+        )
 
 
 def record_failure(
@@ -771,20 +1011,29 @@ def record_failure(
     provenance: dict[str, Any] | None,
     failure: dict[str, Any],
 ) -> Path:
-    """Keep the failure as its own artifact; CSV files of an unfinished block are discarded."""
+    """Keep the failure as its own artifact; CSV files of an unfinished block are discarded.
+
+    With a partial directory, ``failure.json`` and the failed provenance are written INSIDE it
+    before anything else and before the rename (T3c, IA-2): if the rename then fails (a
+    Windows lock that outlasts the retries), the partial directory still carries the evidence,
+    including an A2 violation, and can never be taken for an interruption without record.
+    """
     if partial is not None and partial.exists():
+        _write_records(partial, provenance, failure)
         for leftover in partial.glob("*.csv"):
             leftover.unlink()
-        directory = reserve_failure_directory(destination, _now(), source=partial)
-    else:
-        directory = reserve_failure_directory(destination, _now())
-    if provenance is not None:
-        replace_json(
-            directory / PROVENANCE_FILE,
-            failed_provenance(provenance, failure["episodes_completed"]),
-        )
-    replace_json(directory / FAILURE_FILE, failure)
+        return reserve_failure_directory(destination, _now(), source=partial)
+    directory = reserve_failure_directory(destination, _now())
+    _write_records(directory, provenance, failure)
     return directory
+
+
+def _report(error: BaseException, phase: str) -> None:
+    """Say what happened on the console BEFORE recording it, in case recording fails (IA-2)."""
+    if isinstance(error, A2ViolationError):
+        typer.echo(f"A2 violation, block stopped: {error}", err=True)
+    else:
+        typer.echo(f"error ({phase}): {error}", err=True)
 
 
 # ---------------------------------------------------------------- command
@@ -842,9 +1091,11 @@ def pilot_p1(
         first_hash = next(iter(plan.configs.values())).config_hash  # every hash is listed too
         base = collect_provenance(sys.argv, Path.cwd(), first_hash)
         provenance = provenance_document(mode, plan, base, spec_path, author_authorized)
-        checks = repository_checks(Path.cwd(), plan.inputs, output_root)
+        checks = repository_checks(
+            Path.cwd(), plan.inputs, output_root, destination, spec_path, config_dir
+        )
         provenance["git_checks"] = checks
-        refuse_on_git(base, checks)
+        refuse_on_git(base, checks, real_groups=plan.real_groups)
 
         phase = "execution"
         started = time.perf_counter()
@@ -886,27 +1137,31 @@ def pilot_p1(
             "duration_seconds": round(time.perf_counter() - started, 3),
             "episodes_written": len(rows),
             "episodes_discarded": 0,
+            "result_files": {
+                name: file_sha256(partial / name) for name in (EPISODES_FILE, BOOTSTRAP_FILE)
+            },
+            "a2_violation": False,
         }
         replace_json(partial / PROVENANCE_FILE, provenance)
         publish_directory(partial, destination)
     except A2ViolationError as error:
+        _report(error, phase)
         directory = record_failure(
             destination,
             partial,
             provenance,
             failure_document(error, phase, destination, completed, mode, partial),
         )
-        typer.echo(f"A2 violation, block stopped: {error}", err=True)
         typer.echo(f"failure recorded in {directory}", err=True)
         raise typer.Exit(code=EXIT_A2_VIOLATION) from error
     except Exception as error:
+        _report(error, phase)
         directory = record_failure(
             destination,
             partial,
             provenance,
             failure_document(error, phase, destination, completed, mode, partial),
         )
-        typer.echo(f"error ({phase}): {error}", err=True)
         typer.echo(f"failure recorded in {directory}", err=True)
         raise typer.Exit(code=EXIT_FAILURE) from error
     except KeyboardInterrupt as error:

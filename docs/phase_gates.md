@@ -290,10 +290,11 @@ local, más que los ≈ 80 s estimados en ADR-032; no cambia ningún parámetro 
 ## F4: P1, calibración ecológica
 
 - **Inicio:** 2026-11-15, con autorización expresa del autor limitada a T0; después, T0b, T1, T2,
-  T3 y T3b, cada una autorizada por separado.
-- **Estado:** 🔄 En curso. T0, T0b, T1, T2 y T3 aprobadas por el autor (T2 y T3 tras una
-  auditoría, con observaciones); T3b (correcciones de la auditoría de T3) completada y pendiente
-  de revisión. T4, T4b y la ejecución de episodios de P1 no están autorizadas.
+  T3, T3b y T3c, cada una autorizada por separado.
+- **Estado:** 🔄 En curso. T0, T0b, T1, T2, T3 y T3b aprobadas por el autor (T2, T3 y T3b tras
+  una auditoría, con observaciones); T3c (correcciones de la auditoría de T3b) completada,
+  pendiente del resultado del CI y de la revisión del autor. T4, T4b, T5 y la ejecución de
+  episodios de P1 no están autorizadas.
 - **Criterio de cierre (ADR-024):** criterios de ADR-020 (clase A completa en la confirmación;
   cada B cumplido o aceptado mediante ADR; cada C investigado y documentado), `p_flee` y
   `u_cruise` ajustados y congelados (ADR-012) y etiqueta `env-frozen-v1`.
@@ -340,8 +341,8 @@ No se vuelve de B o C a A; agotar un presupuesto detiene F4 y obliga a consultar
 
 **Tareas previstas:** T0 documentación · T0b corrección de ADR-033 tras la auditoría · T1
 especificación y cargador de P1 · T2 comprobador A2 y ejecución por bloques · T3 comando
-`pilot p1` · **T3b correcciones de la auditoría de T3** · T4 evaluación de criterios desde CSV · **T4b verificador de la secuencia de
-calibración** · **T4c ejecución de las rondas de la rejilla** · T5… iteraciones de calibración ·
+`pilot p1` · **T3b correcciones de la auditoría de T3** · **T3c correcciones de la auditoría de
+T3b** · T4 evaluación de criterios desde CSV · **T4b verificador de la secuencia de calibración** · **T4c ejecución de las rondas de la rejilla** · T5… iteraciones de calibración ·
 confirmación (con autorización expresa) · congelamiento (P1-2, ADR de valores, etiqueta) · cierre.
 
 **T4c (pendiente, decisión T3-2 del autor):** ejecución de las rondas de ajuste de las reglas
@@ -396,20 +397,56 @@ Mientras el resultado de NNN no exista, su especificación se puede reemplazar a
 publicado un resultado completo, su SHA-256 queda fijado y cualquier cambio posterior del archivo
 impide ejecutar los pasos siguientes.
 
-**Aspectos del flujo todavía no definidos (no se inventan reglas; requieren decisión del autor
-antes de usarse):**
+**T3c (correctiva, autorizada por el autor tras la auditoría de T3b; detalle en
+[p1_data_dictionary.md](p1_data_dictionary.md)):**
 
-- **Recalibración antes de una segunda confirmación (P1-21).** La máquina de estados de P1-18 no
-  permite volver de B o C a A, y la validación estática rechazaría iteraciones de etapa A después
-  de la etapa C. Tampoco está definido si la configuración recalibrada necesita una nueva
-  evaluación de entrada: `calibration/entry` ya existiría y no se sobrescribe. T3b solo exige,
-  para la segunda confirmación, la autorización expresa, una primera confirmación completa, que
-  ningún intento de la primera confirmación haya sido una violación A2 y que los valores vengan
-  de una iteración posterior a la usada en la primera confirmación.
+| ID | Decisión |
+|---|---|
+| IA-1 | El contenido ejecutado es el del commit: se rechazan las marcas assume-unchanged y skip-worktree, los filtros `clean`/`process` configurados y las referencias `refs/replace/`; **todo** archivo versionado (código incluido) se compara con el árbol real de HEAD mediante `git hash-object`; el paquete `neuroeco` que se ejecuta debe estar en el repositorio; la procedencia registra el SHA-256 de cada archivo leído |
+| IA-2 | `failure.json` y la procedencia fallida (con `a2_violation`) se escriben dentro del directorio parcial antes de renombrarlo; el aviso se imprime antes de registrar; un intento con A2 declarada en cualquiera de los dos registros nunca se clasifica como interrumpido |
+| IA-3 | `config_files` (SHA-256 de p1.yaml, p0.yaml, base.yaml, scenarios.yaml y baselines.yaml) idénticos en toda la cadena; con los grupos reales, rutas canónicas `configs/pilots/p1.yaml`, `configs/` y `results/pilots/p1` |
+| Mn-1 | La rama remota debe estar bajo `refs/remotes/` y su remoto tener URL; la URL se registra sin credenciales |
+| Mn-3 | Se rechaza un destino cuyos archivos de resultado o de fallo ignore git |
+| Mn-4 | SHA-256 de `episodes.csv` y `bootstrap_keys.csv` en la procedencia, verificados junto con la identidad de cada fila al usarlos como prerrequisito |
+| Mn-5 | Salida de git decodificada en UTF-8 (rutas no ASCII en Windows); el `_git` de F1 no cambia |
+| Mn-6 | Ninguna iteración nueva si existe la evaluación de entrada o cualquier resultado o intento de confirmación |
+| Mn-8 | Los esquemas siguen en `/1` (cambios aditivos); cualquier cambio incompatible futuro sube la versión |
+
+**Decisión operativa Mn-7 (confirmada por el autor en T3c; precisa P1-21 sin modificar
+ADR-033):**
+
+- La segunda confirmación requiere una primera confirmación completada.
+- Debe usar valores de una iteración posterior a la de la primera confirmación; nunca repite la
+  primera con las mismas semillas y valores.
+- Una violación A2 impide la segunda confirmación.
+- No se permite recalibrar ni repetir la evaluación de entrada después de iniciar la
+  confirmación mientras no exista un flujo metodológico expresamente aprobado. Por eso, hoy la
+  segunda confirmación es inalcanzable: requiere aprobar antes ese flujo.
+
+**Aspectos del flujo todavía no definidos (requieren decisión del autor antes de usarse):**
+
+- **Flujo de recalibración tras una confirmación (P1-21).** La máquina de estados de P1-18 no
+  permite volver de B o C a A, la validación estática rechazaría iteraciones de etapa A después
+  de la etapa C y `calibration/entry` no se sobrescribe. El comando bloquea cualquier iteración
+  nueva (Mn-6) hasta que el autor apruebe ese flujo.
 - **Después de una violación A2** el procedimiento es STOP y consulta al autor (P1-18, P1-22); el
   comando no permite repetir la confirmación afectada ni usarla para una segunda confirmación.
 
-**Pendiente de decisión separada (M-3, no autorizada en T3b):** `plant_energy: 30` y
+**Riesgos residuales documentados (T3c):**
+
+- **Mn-2, referencia remota local.** Sin `git fetch`, la sincronización se comprueba contra la
+  referencia de seguimiento local; moverla a mano (`git update-ref`) haría pasar un commit no
+  publicado. Se verifica después: el CI del SHA registrado en `git_commit` debe existir y ser
+  anterior a `timestamp_utc`.
+- **Remoto propio.** Un remoto con URL local pasa la comprobación; la URL queda registrada en
+  `git_checks.remote_url` para revisarla.
+- **Ventana de A2 sin registro.** Si el proceso muere entre detectar una violación A2 y escribir
+  `failure.json`, el intento parecería interrumpido; el aviso de consola se imprime antes.
+- **Entorno de Python.** Se comprueba que el código de `neuroeco` es el del commit, no las
+  dependencias instaladas; sus versiones y el SHA-256 de `uv.lock` quedan en la procedencia, y
+  `uv.lock` es un archivo versionado comparado con HEAD.
+
+**Pendiente de decisión separada (M-3, no autorizada en T3b ni en T3c):** `plant_energy: 30` y
 `plant_energy: 30.0` dan el mismo candidato y la misma física, pero distinto `config_hash`, porque
 el hash se calcula sobre el árbol YAML antes de normalizar los tipos y los overrides de T1 usan
 `repr` del valor tal como se escribió. La corrección propuesta (escribir los overrides con
@@ -446,6 +483,7 @@ necesitan resultados.
 | T1 especificación y cargador de P1 | `1bd2c4d` | `43778824799` ✅ |
 | T2 comprobador A2 y ejecución por bloques | `85509b0` | `43780607071` ✅ |
 | T3 comando `pilot p1` y CSV de episodios y claves | `b53f547` | `43783541818` ✅ |
+| T3b correcciones de la auditoría de T3 | `8daa461` | `43790449030` ✅ |
 
 **Incidencias durante F4:**
 
@@ -462,3 +500,9 @@ necesitan resultados.
   sin que la comprobación del árbol limpio lo detectara, y que el comando no exigía la evaluación
   de entrada antes de la confirmación ni el orden de las iteraciones. Se corrigió en T3b junto con
   los hallazgos menores; M-3 quedó pendiente de una decisión separada.
+- La auditoría independiente de T3b encontró que las marcas skip-worktree y assume-unchanged
+  ocultaban cambios a `git status`, que una violación A2 podía perder su registro si fallaba el
+  renombrado y repetirse como interrupción, y que la configuración podía cambiar entre
+  iteraciones. Al corregirlo en T3c, una revisión propia encontró dos vías más para disfrazar un
+  contenido modificado como el de HEAD (un filtro `clean` configurado solo en `.git` y la
+  sustitución del commit con `git replace`), que también quedaron bloqueadas.

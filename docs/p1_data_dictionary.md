@@ -1,6 +1,6 @@
 # Diccionario de datos de P1
 
-Archivos que escribe `neuroeco pilot p1` (F4, tareas T3 y T3b) en
+Archivos que escribe `neuroeco pilot p1` (F4, tareas T3, T3b y T3c) en
 `results/pilots/p1/<bloque>/<iteration_NNN | entry | evaluation>/`. Las decisiones de origen
 están en [ADR-033](decisions/ADR-033-p1-operational-definitions.md) (P1-13, P1-16, P1-19, P1-20 y
 P1-22) y el formato en [ADR-023](decisions/ADR-023-csv-results.md). La definición de las columnas
@@ -16,7 +16,7 @@ vive en el código (`neuroeco.application.calibration`, `EPISODE_COLUMN_TYPES` y
 | `confirmation/evaluation/` | Bloque de confirmación (`--confirmation --author-authorized`) |
 | `second_confirmation/evaluation/` | Segunda confirmación, solo tras una recalibración autorizada |
 | `<destino>.failed-<AAAAMMDDTHHMMSSZ>-<8 hex>/` | Registro de un intento fallido o rechazado: `failure.json` y, si ya se había capturado, `provenance.json`. Nunca contiene CSV ni es un resultado |
-| `<destino>.partial-<8 hex>/` | Bloque en curso. Solo queda si el proceso murió sin poder registrar el fallo (corte de energía, proceso terminado); se recupera como indica la sección "Recuperación de un directorio parcial" |
+| `<destino>.partial-<8 hex>/` | Bloque en curso. Solo queda si el proceso murió (corte de energía, proceso terminado) o si falló el renombrado final, en cuyo caso ya contiene `failure.json`; se recupera como indica la sección "Recuperación de un directorio parcial" |
 
 Un destino solo existe cuando el bloque terminó completo: los archivos se preparan en
 `<destino>.partial-<id>` y se publican con un único renombrado. Ningún destino se sobrescribe.
@@ -24,9 +24,10 @@ En Windows, si otro proceso (antivirus, indexador) retiene un instante el direct
 renombrado se reintenta como máximo 5 veces con esperas de 0.2, 0.4, 0.8 y 1.6 s; si sigue
 fallando, el bloque se registra como fallo de infraestructura.
 
-Todos los directorios viven dentro del repositorio (`--output-root` debe estar en él) y se
-versionan: el comando exige un árbol de git limpio, así que el resultado o el registro de fallo
-de una ejecución se confirma (commit) antes de la siguiente.
+Todos los directorios viven dentro del repositorio (`--output-root` debe estar en él, y con los
+grupos reales debe ser `results/pilots/p1`), ninguno puede estar ignorado por git y se versionan:
+el comando exige un árbol de git limpio, así que el resultado o el registro de fallo de una
+ejecución se confirma (commit) antes de la siguiente.
 
 ## Formato común
 
@@ -116,33 +117,39 @@ de `collect_provenance` (`timestamp_utc`, `command`, `config_hash` de la primera
 `thread_env`), `mode`, `block`, `stage`, `iteration`, `values_iteration` (número de la iteración
 que aporta los valores), `bootstrap_run`, `scenarios`, `episodes_per_condition`,
 `episodes_planned`, `author_authorized`, `project_seed` (texto), `values`, `values_source`,
-`p1_spec`, `registered_iterations` y `registered_rounds` (ruta y SHA-256), `prerequisites`,
-`previous_attempts`, `git_checks`, `uv_lock_sha256`, `dependencies`, `state_k` (A1, margen de B7
-y comprobaciones E1, E2 y E5 por escenario), `configurations` (escenario, overrides,
-`config_hash`, mundo y reglas de cada configuración resuelta), `finished_utc`,
-`duration_seconds`, `episodes_written` y `episodes_discarded`.
+`p1_spec`, `registered_iterations` y `registered_rounds` (ruta y SHA-256), `config_files`,
+`input_files`, `prerequisites`, `previous_attempts`, `git_checks`, `uv_lock_sha256`,
+`dependencies`, `state_k` (A1, margen de B7 y comprobaciones E1, E2 y E5 por escenario),
+`configurations` (escenario, overrides, `config_hash`, mundo y reglas de cada configuración
+resuelta), `finished_utc`, `duration_seconds`, `episodes_written`, `episodes_discarded`,
+`result_files` y `a2_violation`.
 
-| Campo (T3b) | Contenido |
+| Campo | Contenido |
 |---|---|
-| `prerequisites` | Resultados completos exigidos antes de este bloque (ver "Orden de ejecución"): directorio, modo, `values_iteration` y SHA-256 de su `provenance.json` |
-| `previous_attempts` | Intentos anteriores en el mismo destino: directorio y `kind` (`failure`, `interrupted`, `unrecognized`), con fase, tipo de error, fecha y `a2_violation` (verdadero, falso o `null` si no se puede saber) |
-| `git_checks` | `root` del repositorio, `outside_repository` y `untracked` (archivos leídos fuera del repositorio o sin versionar; deben estar vacíos), `output_root_inside`, `head`, `upstream`, `upstream_commit` y `synchronized` |
+| `config_files` (T3c) | SHA-256 de `p1_spec`, `p0_spec`, `base`, `scenarios` y `baselines`. Deben ser idénticos en toda la cadena (ver "Orden de ejecución") |
+| `input_files` (T3c) | Ruta y SHA-256 de cada archivo leído: configuración, especificaciones registradas y archivos de los resultados exigidos |
+| `prerequisites` | Resultados completos exigidos antes de este bloque: directorio, modo, `values_iteration` y SHA-256 de su `provenance.json` |
+| `previous_attempts` | Intentos anteriores en el mismo destino: directorio y `kind` (`failure`, `interrupted`, `unrecognized`, o `partial` para un directorio parcial sin recuperar), con fase, tipo de error, fecha y `a2_violation` (verdadero, falso o `null` si no se puede saber) |
+| `git_checks` | `root`; `outside_repository` y `untracked` (archivos leídos fuera del repositorio o sin versionar); `hidden_changes` (marcas assume-unchanged o skip-worktree); `content_overrides` (filtros `clean`/`process` configurados o referencias `refs/replace/`); `head_mismatches` (archivos versionados cuyo contenido difiere de HEAD); `package_inside`; `canonical_paths`; `output_root_inside`; `ignored_outputs`; `head`, `upstream`, `upstream_full_ref`, `remote`, `remote_url` (sin credenciales), `upstream_commit` y `synchronized` |
 | `episodes_written` | Episodios publicados: solo con `status` = `completed`; `null` en un fallo |
 | `episodes_discarded` | `null` mientras corre, 0 en un bloque completado y, en un fallo, los episodios ejecutados cuyas filas se descartaron |
+| `result_files` (T3c) | SHA-256 de `episodes.csv` y `bootstrap_keys.csv`, registrados al publicar; `null` en un fallo |
+| `a2_violation` (T3c) | `null` mientras corre, `false` en un bloque completado y, en un fallo, si fue una violación A2 |
 
-En un bloque fallido, `finished_utc`, `duration_seconds` y `episodes_written` valen `null`: nada
-se publicó.
+En un bloque fallido, `finished_utc`, `duration_seconds`, `episodes_written` y `result_files`
+valen `null`: nada se publicó.
 
 ## `failure.json`
 
 `schema` (`neuroeco.p1-failure/1`), `timestamp_utc`, `phase` (`preflight`, `execution` o
-`writing`), `destination`, `command`, `git` (`commit`, `dirty`, `upstream` y `upstream_commit`
-en el momento del fallo), `mode` (modo, bloque, etapa, iteración, `values_iteration`, valores y
-`values_source` con su SHA-256), `previous_attempts` (como en la procedencia), `error_type`,
-`message`, `notes` (identifican el episodio), `episodes_completed` y `a2_violation` (invariante,
-paso —`null` para S₀—, detalle y episodio) o `null`. Código de salida: 2 ante una violación A2 y
-1 ante cualquier otro error. Como `git` y `mode` se registran siempre, una candidata rechazada en
-el estado K (antes de capturar la procedencia) queda documentada en su propio registro.
+`writing`), `destination`, `command`, `git` (`commit`, `dirty`, `upstream`, `upstream_commit` y
+`remote_url` en el momento del fallo), `mode` (modo, bloque, etapa, iteración,
+`values_iteration`, valores y `values_source` con su SHA-256), `previous_attempts` (como en la
+procedencia), `error_type`, `message`, `notes` (identifican el episodio), `episodes_completed` y
+`a2_violation` (invariante, paso —`null` para S₀—, detalle y episodio) o `null`. Código de
+salida: 2 ante una violación A2 y 1 ante cualquier otro error. Como `git` y `mode` se registran
+siempre, una candidata rechazada en el estado K (antes de capturar la procedencia) queda
+documentada en su propio registro.
 
 ## Comprobaciones previas
 
@@ -156,30 +163,54 @@ Antes del primer episodio, y sin ninguna opción para saltarlas:
 2. **Registro.** En `configs/pilots/p1/` solo se admiten `iterations/NNN.yaml` y
    `rounds/RR.yaml`; cualquier otro archivo o subdirectorio se rechaza. Después, la secuencia
    estática de T1.
-3. **Intentos anteriores y orden de ejecución** (secciones siguientes).
-4. **Estado K**, plan exacto del bloque (grupos, condiciones, `item` y overrides de cada tarea),
+3. **Sin recalibración (T3c, Mn-6 y Mn-7).** Una iteración nueva se rechaza si ya existe
+   `calibration/entry` o si existe cualquier resultado o intento de una confirmación.
+4. **Intentos anteriores y orden de ejecución** (secciones siguientes).
+5. **Estado K**, plan exacto del bloque (grupos, condiciones, `item` y overrides de cada tarea),
    autorización de las confirmaciones y destino inexistente.
-5. **Git**, tras capturar la procedencia: árbol limpio; todos los archivos leídos (`p1.yaml`,
-   `p0.yaml`, `base.yaml`, `scenarios.yaml`, `baselines.yaml`, las especificaciones registradas y
-   los archivos de los resultados exigidos) dentro del repositorio y versionados, comprobado con
-   `git ls-files` y no solo con las rutas recibidas; `--output-root` dentro del repositorio; y
-   `HEAD` igual a su rama remota (`@{u}`), es decir, publicado. No se hace `git fetch`: se usa la
-   referencia local que deja el último push, de modo que la comprobación no depende de la red.
+6. **Git**, tras capturar la procedencia, en este orden:
+   - árbol limpio (`git status`);
+   - ningún filtro `clean`/`process` configurado ni referencia `refs/replace/` (con ellos, un
+     contenido modificado podría parecer el de HEAD);
+   - ningún archivo versionado con las marcas assume-unchanged o skip-worktree (`git status`
+     no los mira);
+   - **todo** archivo versionado (código, configuración, especificaciones y resultados) igual al
+     objeto de HEAD, comparado con `git hash-object` (que aplica la conversión de fin de línea)
+     contra el árbol real de HEAD (`--no-replace-objects`); un archivo ausente, un enlace
+     simbólico o un submódulo cuentan como diferencia;
+   - el paquete `neuroeco` que se ejecuta está dentro del repositorio;
+   - todos los archivos leídos dentro del repositorio y versionados (`git ls-files`, no solo las
+     rutas recibidas);
+   - con los grupos reales, las rutas canónicas: `configs/pilots/p1.yaml`, `configs/` y
+     `results/pilots/p1` del repositorio;
+   - `--output-root` dentro del repositorio y ningún archivo de resultado ni de fallo ignorado
+     por git (`git check-ignore`);
+   - la rama remota de HEAD es una rama de seguimiento (`refs/remotes/…`) de un remoto con URL,
+     y su commit es el de HEAD. No se hace `git fetch`: se usa la referencia local que deja el
+     último push, de modo que la comprobación no depende de la red.
 
 ## Orden de ejecución
 
-Un resultado previo cuenta solo si su directorio está publicado, su procedencia tiene `status`
-= `completed`, el modo, bloque e iteración esperados, `episodes_written` = `episodes_planned` =
-filas de `episodes.csv` (con las columnas de este diccionario), existe `bootstrap_keys.csv` y el
-SHA-256 de su especificación (`values_source.sha256`) coincide con el del archivo registrado
-actual. No se mira el valor de ningún criterio (eso es T4b).
+Un resultado previo cuenta solo si su directorio está publicado y su procedencia tiene:
+
+- `status` = `completed`, y el modo, bloque e iteración esperados;
+- `config_files` **idénticos** a los actuales (T3c, IA-3): ningún parámetro ajeno a los ocho
+  valores candidatos puede cambiar a lo largo de la cadena;
+- el SHA-256 de su especificación (`values_source.sha256`) igual al del archivo registrado
+  actual;
+- `episodes_written` = `episodes_planned`;
+- `episodes.csv` y `bootstrap_keys.csv` con el SHA-256 registrado al publicar (T3c, Mn-4), las
+  columnas de este diccionario, tantas filas como episodios escritos y, fila a fila, la
+  identidad planificada (bloque, etapa, iteración, escenario, condición, grupo e `item`).
+
+No se mira el valor de ningún criterio (eso es T4b).
 
 | Modo | Exige |
 |---|---|
-| `--iteration N` | Las iteraciones 1 … N−1 completas |
+| `--iteration N` | Las iteraciones 1 … N−1 completas; ninguna evaluación de entrada ni confirmación iniciada |
 | `--entry-evaluation` | Todas las iteraciones hasta la última (de etapa C) completas |
 | `--confirmation` | Lo anterior y `calibration/entry` completa con los mismos valores |
-| `--second-confirmation` | Las iteraciones completas y `confirmation/evaluation` completa con valores de una iteración **anterior** a la de `--values-from` (P1-21: la segunda confirmación sigue a una recalibración; nunca repite ni sustituye a la primera) |
+| `--second-confirmation` | Las iteraciones completas y `confirmation/evaluation` completa con valores de una iteración **anterior** a la de `--values-from` (P1-21, decisión Mn-7). Como hoy no hay ningún flujo de recalibración aprobado, ninguna iteración posterior a la confirmación puede ejecutarse: la segunda confirmación es inalcanzable mientras no se apruebe ese flujo |
 
 ## Intentos anteriores y repeticiones (D18)
 
@@ -189,31 +220,48 @@ actual. No se mira el valor de ningún criterio (eso es T4b).
   Se rechaza la ejecución si algún intento anterior en el mismo destino fue una violación A2 o
   no tiene un registro reconocible (no se puede descartar A2).
 - **Segunda confirmación.** Se rechaza si algún intento de la primera confirmación fue una
-  violación A2 o no tiene un registro reconocible: una violación A2 no justifica una segunda
-  confirmación.
+  violación A2, no tiene un registro reconocible o es un directorio parcial sin recuperar: una
+  violación A2 no justifica una segunda confirmación.
+- **Cómo se registra un fallo (T3c, IA-2).** El aviso se imprime primero en la consola. Si el
+  bloque ya tenía directorio parcial, `failure.json` y la procedencia fallida (con
+  `a2_violation`) se escriben **dentro de él antes de renombrarlo**; después se borran los CSV y
+  se renombra a `.failed-…`. Si el renombrado falla (un bloqueo de Windows que dura más que los
+  reintentos), el directorio parcial conserva la evidencia.
+- **Clasificación de un intento.** `failure` si tiene un `failure.json` válido; su violación A2
+  cuenta también si solo la declara la procedencia. `interrupted` solo si no hay
+  `failure.json`, la procedencia sigue en `running` y no declara A2. Cualquier otro caso es
+  `unrecognized`.
 
 ## Recuperación de un directorio parcial
 
-Un `<destino>.partial-<id>/` sin publicar solo aparece si el proceso murió sin registrar el fallo.
-El comando rechaza ejecutar ese destino mientras exista. Procedimiento (fallo de infraestructura,
-D18):
+Un `<destino>.partial-<id>/` sin publicar aparece si el proceso murió (corte de energía, proceso
+terminado) o si falló el renombrado final. El comando rechaza ejecutar ese destino mientras
+exista. Procedimiento (D18):
 
-1. Borrar los CSV y los archivos `*.tmp` que contenga, sin usarlos.
-2. Renombrarlo a `<destino>.failed-<AAAAMMDDTHHMMSSZ>-<id>/` (fecha UTC de la recuperación),
-   conservando su `provenance.json` con `status` = `running`. No escribir un `failure.json` a mano.
+1. Borrar los CSV y los archivos `*.tmp` que contenga, sin usarlos. No tocar `failure.json` ni
+   `provenance.json`.
+2. Renombrarlo a `<destino>.failed-<AAAAMMDDTHHMMSSZ>-<id>/` (fecha UTC de la recuperación). No
+   escribir un `failure.json` a mano.
 3. Confirmarlo (commit y push) con un mensaje que documente la interrupción, y volver a ejecutar.
 
-El comando reconoce ese directorio como intento `interrupted`: una violación A2 siempre deja un
-`failure.json`, de modo que un intento interrumpido es, por construcción, un fallo de
-infraestructura.
+Si el directorio contiene `failure.json` (por ejemplo, el renombrado falló tras una violación
+A2), el intento conserva esa clasificación: una violación A2 nunca se convierte en una
+interrupción y la confirmación no se repite. Sin `failure.json`, con la procedencia en `running`,
+el intento se clasifica `interrupted` (fallo de infraestructura).
+
+**Riesgo residual.** Si el proceso muere exactamente entre detectar una violación A2 y escribir
+`failure.json`, o si el disco no admite ni ese archivo, no queda registro y el intento parecería
+interrumpido. El aviso ya se habrá impreso en la consola; ante cualquier duda, el autor debe
+revisar esa salida antes de recuperar el directorio.
 
 ## Acreditación de A2
 
 `episodes.csv` no tiene una columna de A2. El comprobador de P1-22 observa cada paso de cada
 episodio y una violación detiene el bloque sin publicar nada. Por eso A2 se acredita para un
-bloque cuando su `provenance.json` tiene `status` = `completed` y `episodes_written` =
-`episodes_planned` = número de filas de `episodes.csv`; cualquier violación queda en un
-`failure.json` con `a2_violation` distinto de `null`.
+bloque cuando su `provenance.json` tiene `status` = `completed`, `a2_violation` = `false` y
+`episodes_written` = `episodes_planned` = número de filas de `episodes.csv`, con los SHA-256 de
+`result_files`. Cualquier violación queda en un `failure.json` con `a2_violation` distinto de
+`null` y en la procedencia fallida con `a2_violation` = `true`.
 
 ## Historial del esquema
 
@@ -224,3 +272,12 @@ bloque cuando su `provenance.json` tiene `status` = `completed` y `episodes_writ
   `episodes_written`, `finished_utc` y `duration_seconds` pasan a `null`. Los identificadores de
   esquema se mantienen (decisión T3b-2): los cambios son aditivos y no existía ningún archivo
   real con estos esquemas.
+- **T3c:** campos añadidos en la procedencia: `config_files`, `input_files`, `result_files` y
+  `a2_violation`, y en `git_checks` `content_overrides`, `hidden_changes`, `head_mismatches`,
+  `package_inside`, `canonical_paths`, `ignored_outputs`, `upstream_full_ref`, `remote` y
+  `remote_url`; en `failure.json`, `git.remote_url`. Son aditivos y se mantienen los
+  identificadores `/1`. Un resultado anterior a T3c (sin `config_files` ni `result_files`) no
+  sirve como prerrequisito; no existe ninguno real.
+- **Política (Mn-8):** cualquier cambio futuro incompatible (quitar o renombrar un campo, o
+  cambiar su tipo o su significado) incrementará la versión del esquema (`/2`). Los lectores
+  (T4) deben validar los campos que usan y no solo el identificador.

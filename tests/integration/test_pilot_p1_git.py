@@ -1,23 +1,31 @@
-"""F4 T3b: the git checks of ``neuroeco pilot p1`` with real repositories (P1-19; I-1, M-1).
+"""F4 T3b and T3c: the git checks of ``neuroeco pilot p1`` with real repositories (P1-19).
 
 Each test builds a temporary repository with a synthetic configuration (seed_group >= 1000) and a
-local bare remote, and runs the command inside it with no simulation at all: clean tree, tracked
-inputs, output root inside the repository and HEAD synchronized with its upstream. The user's
-git settings are isolated and the project repository is never touched.
+local bare remote, and runs the command inside it: clean tree, no hidden changes, every tracked
+file equal to HEAD, tracked inputs, output root inside the repository and not ignored, and HEAD
+synchronized with a remote-tracking upstream. The only simulated fact is where the ``neuroeco``
+package lives (it is installed from the project, not from the temporary repository), and one
+test checks that refusal with the real location. The user's git settings are isolated and the
+project repository is never touched.
 """
 
 import shutil
+from pathlib import Path
 
 import pytest
 from typer.testing import CliRunner
 
 from neuroeco.infrastructure.provenance import (
+    git_head_mismatches,
+    git_hidden_changes,
+    git_ignored,
     git_state,
     git_toplevel,
     git_untracked,
     git_upstream,
     is_inside,
 )
+from neuroeco.presentation import pilot_p1
 from neuroeco.presentation.cli import app
 from p1_support import (
     commit_all,
@@ -34,22 +42,32 @@ pytestmark = pytest.mark.skipif(shutil.which("git") is None, reason="git is not 
 OUTPUT = "results/pilots/p1"
 
 
-@pytest.fixture
-def repo(tmp_path, monkeypatch):
-    """A pushed repository with the synthetic configuration and iteration 1; cwd inside it."""
-    isolate_git(monkeypatch, tmp_path)
-    remote, work = tmp_path / "remote.git", tmp_path / "work"
-    git(tmp_path, "init", "-q", "--bare", "-b", "main", str(remote))
+def build_repo(base: Path, monkeypatch) -> Path:
+    """A pushed repository under ``base`` with the synthetic configuration and iteration 1."""
+    base.mkdir(parents=True, exist_ok=True)
+    isolate_git(monkeypatch, base)
+    remote, work = base / "remote.git", base / "work"
+    git(base, "init", "-q", "--bare", "-b", "main", str(remote))
     work.mkdir()
     git(work, "init", "-q", "-b", "main")
     configs = make_configs(work)
     register(configs, 1, "A")
+    code = work / "src" / "neuroeco" / "module.py"  # stands for the package code
+    code.parent.mkdir(parents=True)
+    code.write_text("VALUE = 1\n", encoding="utf-8")
     git(work, "add", "-A")
     git(work, "commit", "-q", "-m", "synthetic specification")
     git(work, "remote", "add", "origin", str(remote))
     git(work, "push", "-q", "-u", "origin", "main")
     monkeypatch.chdir(work)
+    monkeypatch.setattr(pilot_p1, "package_directory", lambda: work / "src" / "neuroeco")
     return work
+
+
+@pytest.fixture
+def repo(tmp_path, monkeypatch):
+    """A pushed repository with the synthetic configuration and iteration 1; cwd inside it."""
+    return build_repo(tmp_path, monkeypatch)
 
 
 def run(*arguments: str, spec="configs/pilots/p1.yaml", config_dir="configs", output=OUTPUT):
@@ -75,6 +93,19 @@ def test_a_clean_pushed_repository_runs_and_records_the_checks(repo) -> None:
     assert checks["untracked"] == [] and checks["outside_repository"] == []
     assert checks["output_root_inside"] is True and provenance["git_dirty"] is False
     assert checks["head"] == provenance["git_commit"] == git(repo, "rev-parse", "HEAD")
+    assert checks["hidden_changes"] == [] and checks["head_mismatches"] == []
+    assert checks["ignored_outputs"] == [] and checks["package_inside"] is True
+    assert checks["upstream_full_ref"] == "refs/remotes/origin/main"
+    assert checks["remote_url"] == git(repo, "remote", "get-url", "origin")
+    names = {Path(entry["path"]).name for entry in provenance["input_files"]}
+    assert {"p1.yaml", "p0.yaml", "base.yaml", "scenarios.yaml", "baselines.yaml"} <= names
+    assert set(provenance["config_files"]) == {
+        "p1_spec",
+        "p0_spec",
+        "base",
+        "scenarios",
+        "baselines",
+    }
 
 
 def test_results_must_be_committed_and_pushed_before_the_next_iteration(repo) -> None:
@@ -177,10 +208,168 @@ def test_git_functions_outside_a_repository(tmp_path, monkeypatch) -> None:
     alone = tmp_path / "alone"
     alone.mkdir()
     assert git_toplevel(alone) is None
-    assert git_upstream(alone) == {"ref": None, "commit": None}
+    assert git_upstream(alone) == {
+        "ref": None,
+        "full_ref": None,
+        "commit": None,
+        "remote": None,
+        "remote_url": None,
+    }
     assert git_state(alone) == {
         "commit": None,
         "dirty": None,
         "upstream": None,
         "upstream_commit": None,
+        "remote_url": None,
     }
+    assert git_hidden_changes(alone) is None and git_head_mismatches(alone) is None
+
+
+# ---------------------------------------------------------------- T3c: IA-1 hidden changes
+
+
+def modify(path: Path) -> None:
+    path.write_text(path.read_text(encoding="utf-8") + "# changed locally\n", encoding="utf-8")
+
+
+@pytest.mark.parametrize("flag", ["--skip-worktree", "--assume-unchanged"])
+@pytest.mark.parametrize("target", ["configs/base.yaml", "src/neuroeco/module.py"])
+def test_hidden_local_changes_are_refused(repo, flag, target) -> None:
+    """Q1: the change is invisible to ``git status`` but not to the command."""
+    modify(repo / target)
+    git(repo, "update-index", flag, target)
+    assert git(repo, "status", "--porcelain") == ""
+    assert run("--iteration", iteration(1)).exit_code == 1
+    failure = failure_of(repo, "iteration_001")
+    assert (
+        "assume-unchanged or skip-worktree" in failure["message"] and target in failure["message"]
+    )
+    assert not (repo / OUTPUT / "calibration" / "iteration_001").exists()
+
+
+def test_head_comparison_finds_hidden_and_deleted_files(repo) -> None:
+    """The second layer, independent of the flags: content compared with HEAD blob by blob."""
+    assert git_head_mismatches(repo) == []
+    modify(repo / "configs" / "base.yaml")
+    git(repo, "update-index", "--assume-unchanged", "configs/base.yaml")
+    (repo / "src" / "neuroeco" / "module.py").unlink()
+    git(repo, "update-index", "--skip-worktree", "src/neuroeco/module.py")
+    assert git_hidden_changes(repo) == ["configs/base.yaml", "src/neuroeco/module.py"]
+    assert git_head_mismatches(repo) == ["configs/base.yaml", "src/neuroeco/module.py"]
+
+
+def test_a_local_clean_filter_is_refused(repo) -> None:
+    """A filter driver set only in .git (not versioned) could turn modified text into HEAD's."""
+    (repo / ".git" / "info" / "attributes").write_text("*.yaml filter=hide\n", encoding="utf-8")
+    git(repo, "config", "filter.hide.clean", "cat")
+    assert git(repo, "status", "--porcelain") == ""
+    assert run("--iteration", iteration(1)).exit_code == 1
+    failure = failure_of(repo, "iteration_001")
+    assert (
+        "can disguise modified content" in failure["message"]
+        and "filter.hide" in (failure["message"])
+    )
+
+
+def test_a_replaced_head_commit_is_refused(repo) -> None:
+    """``git replace`` swaps the commit HEAD while ``git rev-parse HEAD`` prints the original."""
+    head = git(repo, "rev-parse", "HEAD")
+    modify(repo / "configs" / "base.yaml")
+    git(repo, "add", "configs/base.yaml")
+    fake = git(repo, "commit-tree", git(repo, "write-tree"), "-m", "fake")
+    git(repo, "replace", head, fake)
+    assert git(repo, "rev-parse", "HEAD") == head and git(repo, "status", "--porcelain") == ""
+    assert git_head_mismatches(repo) == ["configs/base.yaml"]  # the real tree of HEAD
+    assert run("--iteration", iteration(1)).exit_code == 1
+    failure = failure_of(repo, "iteration_001")
+    assert (
+        "can disguise modified content" in failure["message"]
+        and "refs/replace/" in (failure["message"])
+    )
+
+
+def test_end_of_line_conversion_is_not_a_mismatch(repo) -> None:
+    """``git hash-object`` applies the filters: a CRLF checkout of an LF blob is equal."""
+    (repo / ".gitattributes").write_text("*.yaml text eol=crlf\n", encoding="utf-8")
+    commit_all(repo, "attributes")
+    base = repo / "configs" / "base.yaml"
+    base.write_bytes(base.read_bytes().replace(b"\r\n", b"\n").replace(b"\n", b"\r\n"))
+    assert git_head_mismatches(repo) == []
+
+
+def test_the_package_must_be_the_repository_code(repo, monkeypatch) -> None:
+    monkeypatch.setattr(pilot_p1, "package_directory", lambda: repo.parent / "elsewhere")
+    assert run("--iteration", iteration(1)).exit_code == 1
+    assert "running neuroeco package" in failure_of(repo, "iteration_001")["message"]
+
+
+# ---------------------------------------------------------------- T3c: IA-3 canonical paths
+
+
+def test_canonical_paths_are_detected(repo) -> None:
+    shutil.copytree(repo / "configs", repo / "configs_alt")
+    commit_all(repo, "alternative configuration")
+    inputs = [repo / "configs" / "base.yaml"]
+    canonical = pilot_p1.repository_checks(
+        repo,
+        inputs,
+        repo / OUTPUT,
+        repo / OUTPUT / "x",
+        Path("configs/pilots/p1.yaml"),
+        Path("configs"),
+    )
+    alternative = pilot_p1.repository_checks(
+        repo,
+        inputs,
+        repo / OUTPUT,
+        repo / OUTPUT / "x",
+        Path("configs_alt/pilots/p1.yaml"),
+        Path("configs_alt"),
+    )
+    assert canonical["canonical_paths"] is True and alternative["canonical_paths"] is False
+
+
+# ---------------------------------------------------------------- T3c: Mn-1, Mn-3, Mn-5
+
+
+def test_a_local_upstream_branch_is_refused(repo) -> None:
+    """Q2: an upstream that is a local branch publishes nothing."""
+    git(repo, "branch", "shadow")
+    git(repo, "branch", "--set-upstream-to=shadow")
+    assert git_upstream(repo)["full_ref"] == "refs/heads/shadow"
+    assert run("--iteration", iteration(1)).exit_code == 1
+    assert "not a remote-tracking branch" in failure_of(repo, "iteration_001")["message"]
+
+
+def test_the_remote_url_is_recorded_without_credentials(repo) -> None:
+    url = git(repo, "remote", "get-url", "origin")
+    assert git_upstream(repo)["remote_url"] == url
+    git(repo, "remote", "set-url", "origin", "https://user:secret-token@example.invalid/r.git")
+    assert git_upstream(repo)["remote_url"] == "https://example.invalid/r.git"
+    git(repo, "remote", "set-url", "origin", url)
+
+
+@pytest.mark.parametrize("pattern", ["runs/", "*.json", "*.failed-*/"])
+def test_ignored_result_files_are_refused(repo, pattern) -> None:
+    """Q4: results or failure records that git ignores would never be versioned."""
+    (repo / ".gitignore").write_text(pattern + "\n", encoding="utf-8")
+    commit_all(repo, "ignore rule")
+    output = "runs/p1" if pattern == "runs/" else OUTPUT
+    assert run("--iteration", iteration(1), output=output).exit_code == 1
+    failure = last_failure(repo / output / "calibration", "iteration_001")
+    assert "git ignores result files" in failure["message"]
+    assert git_ignored([repo / output / "calibration" / "x.csv"], repo) == (
+        ["runs/p1/calibration/x.csv"] if pattern == "runs/" else []
+    )
+
+
+def test_a_repository_with_a_non_ascii_path_runs(tmp_path, monkeypatch) -> None:
+    """Mn-5: git prints UTF-8 paths; decoding them with the Windows code page broke the checks."""
+    work = build_repo(tmp_path / "repó ñ", monkeypatch)
+    named = work / "configs" / "año.yaml"
+    named.write_text("x: 1\n", encoding="utf-8")
+    commit_all(work, "non-ASCII file name")
+    assert git_toplevel(work) == work.resolve()
+    assert git_untracked([named], work) == []
+    result = run("--iteration", iteration(1))
+    assert result.exit_code == 0, result.output

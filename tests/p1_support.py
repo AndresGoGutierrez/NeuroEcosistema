@@ -42,9 +42,18 @@ PASSING_GIT_CHECKS = {
     "root": "simulated",
     "outside_repository": [],
     "untracked": [],
+    "hidden_changes": [],
+    "content_overrides": [],
+    "head_mismatches": [],
+    "package_inside": True,
+    "canonical_paths": True,
     "output_root_inside": True,
+    "ignored_outputs": [],
     "head": "simulated",
     "upstream": "origin/main",
+    "upstream_full_ref": "refs/remotes/origin/main",
+    "remote": "origin",
+    "remote_url": "https://example.invalid/simulated.git",
     "upstream_commit": "simulated",
     "synchronized": True,
 }
@@ -82,7 +91,7 @@ def simulate_git(monkeypatch, output: Path) -> dict:
         state["files_at_capture"].append(sorted(p.name for p in output.rglob("*")))
         return {**real(command, cwd, config_hash), "git_dirty": state["git_dirty"]}
 
-    def checks(cwd, inputs, output_root):
+    def checks(cwd, inputs, output_root, destination, spec_path, config_dir):
         state["inputs"] = list(inputs)
         return {**PASSING_GIT_CHECKS, **state["checks"]}
 
@@ -204,7 +213,7 @@ def git(cwd: Path, *arguments: str) -> str:
         ["git", *arguments],
         cwd=cwd,
         capture_output=True,
-        text=True,
+        encoding="utf-8",
         check=True,
         env=os.environ.copy(),
     )

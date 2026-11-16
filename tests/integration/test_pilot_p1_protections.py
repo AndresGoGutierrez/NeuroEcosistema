@@ -1,14 +1,18 @@
-"""F4 T3b: protections of ``neuroeco pilot p1`` against bypasses (ADR-033; audit of T3).
+"""F4 T3b and T3c: protections of ``neuroeco pilot p1`` against bypasses (ADR-033; audits).
 
 Approved seed groups (I-1), execution order and complete prerequisites (I-2), earlier attempts
-and D18 (M-6), strict registry (M-10), the git refusals (M-1, I-1) and interruptions (M-7).
+and D18 (M-6), strict registry (M-10), the git refusals (M-1, I-1) and interruptions (M-7);
+T3c: configuration identity along the chain (IA-3), integrity of the prerequisite CSV files
+(Mn-4), no recalibration (Mn-6, Mn-7) and the A2 evidence when the rename fails (IA-2).
 Synthetic specifications with seed_group >= 1000 run the episodes. The only appearances of the
-real groups 10-32 are specifications refused in the pre-flight, before any random generator is
-created. Git facts are simulated here; ``test_pilot_p1_git.py`` uses real repositories.
+real groups 10-32 are specifications refused before any episode, and the test that reaches the
+git checks with them replaces the block runner with a guard that fails if an episode were ever
+started. Git facts are simulated here; ``test_pilot_p1_git.py`` uses real repositories.
 """
 
 import copy
 import json
+import shutil
 
 import pytest
 import yaml
@@ -16,6 +20,8 @@ import yaml
 from neuroeco.application import calibration
 from neuroeco.application.calibration import InvariantViolationError
 from neuroeco.domain.state import InitializationError
+from neuroeco.infrastructure import storage
+from neuroeco.infrastructure.provenance import file_sha256
 from neuroeco.presentation import pilot_p1
 from p1_support import (
     SYNTHETIC_SPEC,
@@ -153,6 +159,29 @@ def overstate_written(directory, configs) -> None:
     path.write_text(json.dumps(data), encoding="utf-8")
 
 
+def drop_config_files(directory, configs) -> None:
+    """A result without the configuration hashes (as produced before T3c)."""
+    path = directory / "provenance.json"
+    data = read_json(path)
+    del data["config_files"]
+    path.write_text(json.dumps(data), encoding="utf-8")
+
+
+def edit_bootstrap_keys(directory, configs) -> None:
+    path = directory / "bootstrap_keys.csv"
+    path.write_bytes(path.read_bytes().replace(b",1000,", b",1001,", 1))
+
+
+def forge_rows_and_hash(directory, configs) -> None:
+    """Mn-4: a foreign seed group in one row, and the recorded hash updated to match."""
+    path = directory / "episodes.csv"
+    path.write_bytes(path.read_bytes().replace(b",1000,", b",1010,", 1))
+    provenance = directory / "provenance.json"
+    data = read_json(provenance)
+    data["result_files"]["episodes.csv"] = file_sha256(path)
+    provenance.write_text(json.dumps(data), encoding="utf-8")
+
+
 def edit_registered_spec(directory, configs) -> None:
     """The registered specification changed after its result (identity by SHA-256)."""
     path = configs / "pilots" / "p1" / "iterations" / "001.yaml"
@@ -163,13 +192,26 @@ def edit_registered_spec(directory, configs) -> None:
     ("damage", "message"),
     [
         (corrupt_status, "status 'failed'"),
-        (drop_last_row, "has 23 rows (expected 24)"),
+        (drop_last_row, "episodes.csv does not match the SHA-256 recorded at publication"),
         (drop_bootstrap_keys, "bootstrap_keys.csv is missing"),
         (drop_provenance, "must be a published, completed result first"),
         (overstate_written, "has 24 rows (expected 25)"),
         (edit_registered_spec, "values_source.sha256 is"),
+        (drop_config_files, "config_files is None"),
+        (edit_bootstrap_keys, "bootstrap_keys.csv does not match the SHA-256"),
+        (forge_rows_and_hash, "are not the planned episodes"),
     ],
-    ids=["status", "missing-row", "missing-keys", "missing-provenance", "count", "spec-sha256"],
+    ids=[
+        "status",
+        "missing-row",
+        "missing-keys",
+        "missing-provenance",
+        "count",
+        "spec-sha256",
+        "no-config-hashes",
+        "keys-edited",
+        "forged-rows",
+    ],
 )
 def test_incomplete_or_altered_prerequisites_are_refused(setup, damage, message) -> None:
     configs, output, _ = setup
@@ -211,7 +253,10 @@ def test_prerequisite_files_are_declared_as_inputs(setup) -> None:
 # ---------------------------------------------------------------- second confirmation (P1-21)
 
 
-def test_second_confirmation_follows_a_completed_confirmation_and_a_recalibration(setup) -> None:
+def test_second_confirmation_is_never_a_repetition_and_no_recalibration_runs(setup) -> None:
+    """Mn-7 (author's decision in T3c): a completed first confirmation and values from a later
+    iteration; no recalibration while no flow is approved, so a second confirmation cannot be
+    reached today: every route to it is refused."""
     configs, output, _ = setup
     last = run_chain(configs, output)
     run_ok(configs, output, "--entry-evaluation", "--values-from", str(last))
@@ -227,11 +272,30 @@ def test_second_confirmation_follows_a_completed_confirmation_and_a_recalibratio
     assert "must come from a later iteration" in failure["message"]
 
     recalibrated = register(configs, 4, "C", "n_predators_c", n_predators_c=9)
-    run_ok(configs, output, "--iteration", str(recalibrated))
-    run_ok(configs, output, "--second-confirmation", *authorized(recalibrated))
-    provenance = read_json(output / "second_confirmation" / "evaluation" / "provenance.json")
-    assert (provenance["block"], provenance["values_iteration"]) == ("second_confirmation", 4)
-    assert len(provenance["previous_attempts"]) == 2  # the two refusals, kept on record
+    assert invoke(configs, output, "--iteration", str(recalibrated)).exit_code == 1
+    failure = last_failure(output / "calibration", "iteration_004")
+    assert "no recalibration flow is approved" in failure["message"]
+    without_iteration = invoke(configs, output, "--second-confirmation", *authorized(recalibrated))
+    assert without_iteration.exit_code == 1
+    failure = last_failure(output / "second_confirmation", "evaluation")
+    assert "iteration_004 must be a published, completed result" in failure["message"]
+    assert not (output / "second_confirmation" / "evaluation").exists()
+
+
+@pytest.mark.parametrize("started", ["entry", "confirmation-attempt"])
+def test_no_iteration_after_the_entry_evaluation_or_a_started_confirmation(setup, started):
+    configs, output, _ = setup
+    last = run_chain(configs, output)
+    if started == "entry":
+        run_ok(configs, output, "--entry-evaluation", "--values-from", str(last))
+    else:  # an attempt left in the confirmation directory, without any entry evaluation
+        attempt = output / "confirmation" / "evaluation.failed-20261115T120000Z-0000abcd"
+        attempt.mkdir(parents=True)
+    four = register(configs, 4, "C", "n_predators_c", n_predators_c=9)
+    assert invoke(configs, output, "--iteration", str(four)).exit_code == 1
+    failure = last_failure(output / "calibration", "iteration_004")
+    assert "no recalibration flow is approved" in failure["message"]
+    assert not (output / "calibration" / "iteration_004").exists()
 
 
 # ---------------------------------------------------------------- earlier attempts (D18, M-6)
@@ -263,7 +327,7 @@ def test_a_confirmation_stopped_by_a2_is_never_repeated_nor_replaced(setup, monk
     assert [a["a2_violation"] for a in failure["previous_attempts"]] == [True]
 
     recalibrated = register(configs, 4, "C", "n_predators_c", n_predators_c=9)
-    run_ok(configs, output, "--iteration", str(recalibrated))
+    assert invoke(configs, output, "--iteration", str(recalibrated)).exit_code == 1  # Mn-6
     second = invoke(configs, output, "--second-confirmation", *authorized(recalibrated))
     assert second.exit_code == 1
     failure = last_failure(output / "second_confirmation", "evaluation")
@@ -434,3 +498,132 @@ def test_failures_list_the_earlier_attempts(setup) -> None:
     invoke(configs, output, "--iteration", str(path))
     records = [read_json(d / "failure.json") for d in failures(output)]
     assert sorted(len(r["previous_attempts"]) for r in records) == [0, 1]
+
+
+# ---------------------------------------------------------------- T3c: IA-3 configuration chain
+
+
+def change_capture_radius(configs) -> None:
+    """A parameter outside the candidate values (K1 still holds with 2.4)."""
+    base = configs / "base.yaml"
+    data = yaml.safe_load(base.read_text(encoding="utf-8"))
+    data["world"]["capture_radius"] = 2.4
+    base.write_text(yaml.safe_dump(data), encoding="utf-8")
+
+
+def test_a_configuration_change_breaks_the_chain(setup) -> None:
+    """Q5: only the 8 candidate values may change, one per iteration; anything else is refused."""
+    configs, output, _ = setup
+    run_ok(configs, output, "--iteration", str(register(configs, 1, "A")))
+    change_capture_radius(configs)
+    second = register(configs, 2, "A", "plant_energy", plant_energy=35.0)
+    assert invoke(configs, output, "--iteration", str(second)).exit_code == 1
+    failure = last_failure(output / "calibration", "iteration_002")
+    assert "config_files is" in failure["message"]
+    assert not (output / "calibration" / "iteration_002").exists()
+
+
+@pytest.mark.parametrize("changed", [False, True])
+def test_an_alternative_configuration_directory(setup, tmp_path, changed) -> None:
+    """Same bytes are the same configuration; any difference breaks the chain."""
+    configs, output, _ = setup
+    run_ok(configs, output, "--iteration", str(register(configs, 1, "A")))
+    register(configs, 2, "A", "plant_energy", plant_energy=35.0)
+    alternative = tmp_path / "alternative" / "configs"
+    shutil.copytree(configs, alternative)
+    if changed:
+        change_capture_radius(alternative)
+    second = alternative / "pilots" / "p1" / "iterations" / "002.yaml"
+    result = invoke(alternative, output, "--iteration", str(second))
+    assert result.exit_code == (1 if changed else 0)
+    if changed:
+        failure = last_failure(output / "calibration", "iteration_002")
+        assert "config_files is" in failure["message"]
+
+
+def test_real_seed_groups_require_the_canonical_paths(setup, monkeypatch) -> None:
+    """IA-3: with the real table the paths must be configs/ and configs/pilots/p1.yaml.
+
+    The block runner is replaced by a guard: no episode may ever start with real seed groups.
+    """
+    configs, output, state = setup
+    approved = copy.deepcopy(SYNTHETIC_SPEC)
+    for block, (episodes, groups) in calibration.APPROVED_BLOCKS.items():
+        approved["blocks"][block] = {
+            "episodes": episodes,
+            "seed_groups": dict(zip("abc", groups, strict=True)),
+        }
+    write_spec(configs, approved)
+
+    def guard(*args, **kwargs):
+        raise AssertionError("an episode with real seed groups was about to start")
+
+    monkeypatch.setattr(pilot_p1, "iter_block", guard)
+    state["checks"] = {"canonical_paths": False}
+    result = invoke(configs, output, "--iteration", str(register(configs, 1, "A")))
+    assert result.exit_code == 1
+    assert_no_results(output)
+    _, failure = only_failure(output)
+    assert "must be configs/pilots/p1.yaml" in failure["message"]
+    assert failure["error_type"].endswith("P1RefusalError")
+
+
+# ---------------------------------------------------------------- T3c: IA-2 evidence of A2
+
+
+def test_an_a2_violation_keeps_its_evidence_when_the_rename_fails(setup, monkeypatch) -> None:
+    """Q7: A2 violation, then a persistent PermissionError on every rename (Windows lock).
+
+    The partial directory keeps failure.json and the failed provenance; after the documented
+    recovery the attempt is still an A2 violation and the confirmation is never repeated.
+    """
+    configs, output, _ = setup
+    last = run_chain(configs, output)
+    run_ok(configs, output, "--entry-evaluation", "--values-from", str(last))
+
+    def locked(source, target):
+        raise PermissionError("synthetic lock that outlasts the retries")
+
+    with monkeypatch.context() as patch:
+        inject_a2(patch)
+        patch.setattr(storage, "RENAME_FIRST_DELAY_SECONDS", 0.0)
+        patch.setattr(storage.os, "rename", locked)
+        result = invoke(configs, output, "--confirmation", *authorized(last))
+    assert result.exit_code != 0 and isinstance(result.exception, PermissionError)
+    assert "A2 violation, block stopped" in result.stderr  # said before recording
+    [partial] = sorted((output / "confirmation").glob("evaluation.partial-*"))
+    assert sorted(p.name for p in partial.iterdir()) == ["failure.json", "provenance.json"]
+    failure = read_json(partial / "failure.json")
+    assert failure["a2_violation"]["invariant"] == "prey_identity"
+    provenance = read_json(partial / "provenance.json")
+    assert (provenance["status"], provenance["a2_violation"]) == ("failed", True)
+
+    before_recovery = invoke(configs, output, "--confirmation", *authorized(last))
+    assert before_recovery.exit_code == 1
+    assert "must be recovered first" in before_recovery.output
+
+    # documented recovery (M-8): rename the partial directory to a failed one
+    partial.rename(partial.with_name(partial.name.replace("partial-", "failed-20261116T000000Z-")))
+    retry = invoke(configs, output, "--confirmation", *authorized(last))
+    assert retry.exit_code == 1
+    assert "never after an A2 violation (D18)" in retry.output
+    assert not (output / "confirmation" / "evaluation").exists()
+
+
+def test_an_a2_flag_in_the_provenance_alone_blocks_a_confirmation(setup) -> None:
+    """A failure record lost or damaged, but the failed provenance says A2: never repeated."""
+    configs, output, _ = setup
+    last = run_chain(configs, output)
+    run_ok(configs, output, "--entry-evaluation", "--values-from", str(last))
+    attempt = output / "confirmation" / "evaluation.failed-20261115T120000Z-0000abcd"
+    attempt.mkdir(parents=True)
+    (attempt / "provenance.json").write_text(
+        json.dumps(
+            {"schema": pilot_p1.PROVENANCE_SCHEMA, "status": "failed", "a2_violation": True}
+        ),
+        encoding="utf-8",
+    )
+    assert invoke(configs, output, "--confirmation", *authorized(last)).exit_code == 1
+    failure = last_failure(output / "confirmation", "evaluation")
+    assert "cannot be told apart from an A2 violation" in failure["message"]
+    assert failure["previous_attempts"][0]["a2_violation"] is True
