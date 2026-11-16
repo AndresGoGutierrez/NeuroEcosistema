@@ -296,8 +296,9 @@ local, más que los ≈ 80 s estimados en ADR-032; no cambia ningún parámetro 
   validada en las comprobaciones automáticas (CI `43797566961` de `bb82864`, correcto en Ubuntu y
   Windows). T4 (evaluación de criterios, comando `pilot p1-criteria` y selección de P1-17)
   completada y validada en las comprobaciones automáticas (CI `43807682418` de `85c42af`,
-  correcto en Ubuntu y Windows, 802 pruebas), pendiente de la revisión del autor. T4b, T4c, T5 y
-  la ejecución de episodios de P1 no están autorizadas.
+  correcto en Ubuntu y Windows, 802 pruebas), pendiente de la revisión del autor. T4b
+  (verificador de la secuencia, D-T4b-1 a D-T4b-4) completada, pendiente de la revisión del
+  autor. T4c, T5 y la ejecución de episodios de P1 no están autorizadas.
 - **Criterio de cierre (ADR-024):** criterios de ADR-020 (clase A completa en la confirmación;
   cada B cumplido o aceptado mediante ADR; cada C investigado y documentado), `p_flee` y
   `u_cruise` ajustados y congelados (ADR-012) y etiqueta `env-frozen-v1`.
@@ -481,12 +482,26 @@ el hash se calcula sobre el árbol YAML antes de normalizar los tipos y los over
 `float(...)`) toca código de T1. Mientras tanto, las especificaciones reales deben escribir
 `plant_energy` siempre con decimales (por ejemplo, `30.0`).
 
-**T4b (pendiente, decisión T1-2 del autor):** verificador de las restricciones de la máquina de
+**T4b (decisión T1-2 del autor):** verificador de las restricciones de la máquina de
 estados que dependen de resultados, ejecutado antes de autorizar cada iteración: que S_A, S_B o
 S_C se cumplieron o no en la evaluación anterior, las iteraciones "infructuosas" de D9, las
 alternancias provocadas por una reevaluación A_rev fallida y que las reglas cambien solo a los
 valores ganadores de una ronda. T1 cubre únicamente las comprobaciones estáticas, que no
 necesitan resultados.
+
+Implementado en `analysis/sequence.py` y el comando de solo lectura `neuroeco pilot
+p1-sequence` (detalle en [p1_data_dictionary.md](p1_data_dictionary.md)), con las decisiones del
+autor:
+
+| ID | Decisión del autor |
+|---|---|
+| D-T4b-1 | Comando independiente; `pilot_p1.py` no cambia. **Antes de autorizar T5 es obligatorio integrar este verificador en las comprobaciones previas de `pilot p1`** |
+| D-T4b-2 | Se verifican todas las transiciones posibles con los datos actuales; tras una A con S_A cumplido y r < 3 se exige una ronda; lo que sigue a una ronda (sus resultados, A_rev, las alternancias que provoque y que las reglas cambien a los ganadores) se declara no verificable hasta T4c y nunca se acepta en silencio |
+| D-T4b-3 | Con S_B o S_C cumplido y algún criterio B incumplido se admiten otra iteración de la etapa (causa paramétrica) o la etapa siguiente (decisión documentada); el informe indica que es un juicio del autor, no una comprobación automática |
+| D-T4b-4 | D9: `n_plants` solo tras dos iteraciones A **consecutivas** infructuosas (S_A incumplido) que cambiaron `plant_energy` o `regrow_delay`; la vía E5 no se deduce y requiere la confirmación explícita y documentada del autor (`--d9-confirmed`) |
+
+Los resultados se usan solo si pertenecen a su especificación registrada (SHA-256 de
+`values_source`) y si su `criteria.csv` coincide byte a byte con los criterios recalculados.
 
 **Decisiones de T1 (aprobadas por el autor):**
 
@@ -518,6 +533,8 @@ necesitan resultados.
 | T4-I2 bootstrap, A6 y BCa descriptivo de B2 | `fa8b076` | `43804513444` ✅ (776 pruebas) |
 | T4-I3 comando `pilot p1-criteria` | `1b7f786` | Publicado con I4 (`43807682418` ✅) |
 | T4-I4 selección de P1-17 y registro de T4 | `85c42af` | `43807682418` ✅ (802 pruebas en Ubuntu y en Windows) |
+| T4 cierre documental | `64a4454` | `43808611612` ✅ |
+| T4b verificador de la secuencia | commit que añade esta fila | CI de su publicación (resultado en el informe al autor) |
 
 **Incidencias durante F4:**
 

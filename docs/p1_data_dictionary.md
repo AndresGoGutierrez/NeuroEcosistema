@@ -329,6 +329,33 @@ función pura (`select_prey`, `select_predator`) que T4c usará sobre las filas 
 `stage_requirements` (etapa y si se cumplen S_A, S_B, S_C o toda la clase A según la etapa,
 P1-18).
 
+## Verificación de la secuencia: `neuroeco pilot p1-sequence` (T4b)
+
+`neuroeco pilot p1-sequence [--spec configs/pilots/p1.yaml] [--output-root results/pilots/p1]
+[--d9-confirmed N ...]` es de solo lectura: no ejecuta episodios ni escribe archivos. Se ejecuta
+antes de autorizar cada iteración (D-T4b-1); antes de T5 debe integrarse en las comprobaciones
+previas de `pilot p1`.
+
+1. Ordena los pasos: las iteraciones registradas, cada una seguida de sus rondas
+   (`after_iteration`), y la evaluación de entrada si está publicada.
+2. Para cada iteración con resultado publicado comprueba que pertenece a su especificación
+   registrada (modo, etapa, iteración, valores y SHA-256 de `NNN.yaml` en `values_source`) y
+   que su `criteria.csv` es exactamente la evaluación del código actual: se recalcula y se
+   compara byte a byte, y `criteria_provenance.json` debe corresponder a los archivos. Sin
+   `criteria.csv` el bloque no se puede usar.
+3. Recorre las transiciones de P1-18 con el resultado de cada evaluación (S_A, S_B, S_C o la
+   clase A completa en la entrada, y los criterios B incumplidos) y se detiene en la primera no
+   permitida o en el primer paso sin resultado, que es el que va a ejecutarse.
+
+Veredictos: `allowed`, `rejected` (transición contraria a P1-18), `stop` (presupuesto agotado o
+entrada fallida: consultar al autor), `not_verifiable_until_T4c` (lo que sigue a una ronda
+depende de sus resultados y de A_rev, D-T4b-2), `author_confirmation_required` (cambio de
+`n_plants` por la vía E5 de D9) y `author_authorization_required` (la entrada cumplió la clase
+A; la confirmación necesita la autorización expresa, D11). El código de salida es 0 solo con
+`allowed`. Las notas del informe señalan las transiciones que requieren una decisión documentada
+del autor (D-T4b-3); no son comprobaciones automáticas. `--d9-confirmed N` registra que el autor
+confirmó la vía E5 para la iteración N, y esa confirmación debe constar en su motivo (P1-19).
+
 ## Historial del esquema
 
 - **T3 (`b53f547`):** primera versión de `neuroeco.p1-provenance/1` y `neuroeco.p1-failure/1`.
