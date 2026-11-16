@@ -292,9 +292,9 @@ local, más que los ≈ 80 s estimados en ADR-032; no cambia ningún parámetro 
 - **Inicio:** 2026-11-15, con autorización expresa del autor limitada a T0; después, T0b, T1, T2,
   T3, T3b y T3c, cada una autorizada por separado.
 - **Estado:** 🔄 En curso. T0, T0b, T1, T2, T3 y T3b aprobadas por el autor (T2, T3 y T3b tras
-  una auditoría, con observaciones); T3c (correcciones de la auditoría de T3b) completada,
-  pendiente del resultado del CI y de la revisión del autor. T4, T4b, T5 y la ejecución de
-  episodios de P1 no están autorizadas.
+  una auditoría, con observaciones); T3c (correcciones de la auditoría de T3b) completada y
+  validada en las comprobaciones automáticas (CI `43797566961` de `bb82864`, correcto en Ubuntu y
+  Windows). T4, T4b, T5 y la ejecución de episodios de P1 no están autorizadas.
 - **Criterio de cierre (ADR-024):** criterios de ADR-020 (clase A completa en la confirmación;
   cada B cumplido o aceptado mediante ADR; cada C investigado y documentado), `p_flee` y
   `u_cruise` ajustados y congelados (ADR-012) y etiqueta `env-frozen-v1`.
@@ -485,6 +485,7 @@ necesitan resultados.
 | T3 comando `pilot p1` y CSV de episodios y claves | `b53f547` | `43783541818` ✅ |
 | T3b correcciones de la auditoría de T3 | `8daa461` | `43790449030` ✅ |
 | T3c correcciones de la auditoría de T3b | `e4900ba` | `43795462046` ❌ (Windows; Ubuntu ✅) |
+| T3c corrección de la prueba de fin de línea | `bb82864` | `43797566961` ✅ (693 pruebas en Ubuntu y en Windows) |
 
 **Incidencias durante F4:**
 
@@ -510,7 +511,8 @@ necesitan resultados.
 - El CI de `e4900ba` falló solo en Windows, en la prueba de conversión de fin de línea: el CI
   extrae el proyecto con CRLF (`core.autocrlf=true`) y la prueba guardaba esos CRLF en el
   repositorio temporal, de modo que la premisa (LF en HEAD) no se cumplía. El código de
-  producción era correcto: detectaba que esos archivos no eran el contenido de HEAD. Un commit
-  correctivo de T3c renormaliza los blobs en la prueba, comprueba explícitamente sus finales de
-  línea y añade el caso contrario (blob CRLF bajo un atributo `text`), para que no dependa del
-  sistema operativo. El repositorio real no tiene blobs con CRLF.
+  producción era correcto: detectaba que esos archivos no eran el contenido de HEAD. El commit
+  correctivo `bb82864` renormaliza los blobs en la prueba, comprueba explícitamente sus finales
+  de línea y añade el caso contrario (blob CRLF bajo un atributo `text`), para que no dependa del
+  sistema operativo; su CI `43797566961` pasó en Ubuntu y en Windows (693 pruebas en cada uno).
+  El repositorio real no tiene blobs con CRLF.
