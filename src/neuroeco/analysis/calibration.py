@@ -69,10 +69,12 @@ CONDITIONS_BY_SCENARIO: Mapping[str, tuple[str, ...]] = {
 
 ENTRY_STAGE = "entry"
 CONFIRMATION_STAGE = "confirmation"
+REEVALUATION_STAGE = "A_rev"  # T4c: the re-evaluation of A after a round (P1-18)
 STAGE_SCENARIOS: Mapping[str, tuple[str, ...]] = {
     "A": ("A",),
     "B": ("A", "B"),
     "C": ("A", "C"),
+    REEVALUATION_STAGE: ("A",),
     ENTRY_STAGE: SCENARIOS,
     CONFIRMATION_STAGE: SCENARIOS,
 }
@@ -320,18 +322,33 @@ def load_block(directory: Path) -> Block:
     """Read and verify a published block; any inconsistency stops the evaluation."""
     provenance = _read_provenance(directory)
     recorded = provenance.get("result_files")
-    for name in (EPISODES_FILE, BOOTSTRAP_FILE):
+    names = block_files(provenance["stage"])[1:]  # the CSV files, after provenance.json
+    for name in names:
         path = directory / name
         if not path.is_file():
             raise CriteriaError(f"{name} is missing")
         if not isinstance(recorded, dict) or recorded.get(name) != _sha256(path):
             raise CriteriaError(f"{name} does not match the SHA-256 recorded at publication")
+    if not isinstance(recorded, dict) or set(recorded) != set(names):
+        raise CriteriaError(f"result_files must list exactly {list(names)}")
     rows = _read_csv(directory / EPISODES_FILE, EPISODE_COLUMN_TYPES)
-    keys = _read_csv(directory / BOOTSTRAP_FILE, BOOTSTRAP_COLUMN_TYPES)
+    keys = (
+        _read_csv(directory / BOOTSTRAP_FILE, BOOTSTRAP_COLUMN_TYPES)
+        if BOOTSTRAP_FILE in names
+        else ()
+    )
     block = Block(directory, provenance, rows, keys)
     _check_rows(block)
-    _check_bootstrap_keys(block)
+    if keys:
+        _check_bootstrap_keys(block)
     return block
+
+
+def block_files(stage: str) -> tuple[str, ...]:
+    """Files of a published block of ``stage``: A_rev has no bootstrap keys (D-T4c-1)."""
+    if stage == REEVALUATION_STAGE:
+        return (PROVENANCE_FILE, EPISODES_FILE)
+    return (PROVENANCE_FILE, EPISODES_FILE, BOOTSTRAP_FILE)
 
 
 def _fail(row: Row, message: str) -> CriteriaError:
@@ -951,7 +968,16 @@ def _a6(block: Block, scenario: str) -> CriterionResult:
 
 
 def _b2_interval(block: Block, result: CriterionResult) -> CriterionResult:
-    """B2 keeps its verdict (the sum of the paired differences); the BCa is descriptive (P1-7)."""
+    """B2 keeps its verdict (the sum of the paired differences); the BCa is descriptive (P1-7).
+
+    A_rev has no bootstrap key (P1-20 defines none, D-T4c-1): its interval is not computed and
+    the row says so; the verdict does not change.
+    """
+    if block.stage == REEVALUATION_STAGE:
+        return dataclasses.replace(
+            result,
+            value=f"{result.value}; BCa not computed: P1-20 defines no key for A_rev (D-T4c-1)",
+        )
     other, metric = _B2_PAIRS[result.part]
     differences = [
         float(metric(r) - metric(o)) for r, o in paired(block, result.scenario, RULES, other)
@@ -1229,7 +1255,10 @@ CLASS_A_REQUIREMENTS: tuple[tuple[str, str, str], ...] = (
 
 
 def requirements(stage: str) -> tuple[tuple[str, str, str], ...]:
-    """S_A, S_B or S_C of an iteration; the whole class A for the entry and confirmations."""
+    """S_A, S_B or S_C of an iteration (S_A for A_rev); the whole class A for the entry and
+    confirmations."""
+    if stage == REEVALUATION_STAGE:
+        return STAGE_REQUIREMENTS["A"]  # P1-18: A_rev evaluates S_A
     if stage in STAGE_REQUIREMENTS:
         return STAGE_REQUIREMENTS[stage]
     if stage in (ENTRY_STAGE, CONFIRMATION_STAGE):

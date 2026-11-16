@@ -264,6 +264,40 @@ bloque cuando su `provenance.json` tiene `status` = `completed`, `a2_violation` 
 `result_files`. Cualquier violación queda en un `failure.json` con `a2_violation` distinto de
 `null` y en la procedencia fallida con `a2_violation` = `true`.
 
+## Rondas de ajuste de las reglas: `pilot p1 --round RR.yaml --phase …` (T4c)
+
+Una ronda registrada (`configs/pilots/p1/rounds/RR.yaml`, P1-19) se ejecuta en fases, cada una
+con todas las protecciones de los demás modos (D-T4c-3):
+
+| Fase | Directorio | Episodios | Archivos |
+|---|---|---|---|
+| `prey` | `calibration/round_RR/prey_grid/` | `rules` en A × 12 combinaciones `p_flee` × `u_cruise` de la presa | `episodes.csv`, `selection.json`, `provenance.json` |
+| `predator` | `calibration/round_RR/predator_grid/` | `rules` en A × 3 valores de `u_cruise` del depredador, con la presa ganadora | `episodes.csv`, `selection.json`, `provenance.json` |
+| `reevaluation` | `calibration/round_RR/reevaluation/` | A_rev: las 12 condiciones de A con los ganadores; solo si la ronda cambió algún valor | `episodes.csv`, `provenance.json` |
+
+- **Filas:** mismas columnas de `episodes.csv`; `stage` = `round_prey`, `round_predator` o
+  `A_rev` (valores añadidos, D-T4c-6) e `iteration` = la iteración A tras la que va la ronda.
+  En una rejilla, cada fila lleva los valores de su combinación; todas las combinaciones usan
+  las mismas claves (grupo de calibración de A, `item` 0…n−1, P1-13).
+- **Sin claves del bootstrap:** las rejillas no calculan intervalos y P1-20 no define clave
+  para A_rev (D-T4c-1). En los criterios de A_rev, B2 conserva su veredicto (suma pareada) y su
+  BCa figura como no calculado; A_rev se evalúa con S_A (P1-18).
+- **`selection.json`** (`neuroeco.p1-selection/1`): `phase`, `parameters`, `winner`,
+  `objective`, `rule` (`unique`, `current`, `lowest u_cruise`, `lowest p_flee`), `tied` y
+  `totals` de todas las combinaciones (P1-4, P1-17). Se calcula con `select_prey` o
+  `select_predator` sobre las filas publicadas.
+- **Procedencia:** el mismo esquema con los campos añadidos `round` y `phase`; `values` son los
+  valores con los que se ejecutó la fase (los vigentes en la rejilla de la presa, con la presa
+  ganadora en la del depredador y con los dos ganadores en A_rev).
+- **Encadenamiento:** una fase exige la iteración de anclaje y las anteriores, todas las
+  fases de las rondas anteriores (A_rev solo si la ronda cambió algo) y las fases previas de su
+  ronda. Los ganadores se recalculan siempre desde las filas publicadas y `selection.json` debe
+  coincidir byte a byte (D-T4c-2). A_rev se rechaza si la ronda no cambió ningún valor.
+- **Determinismo (D-T4c-4):** en la rejilla de la presa, las filas de la combinación vigente
+  deben ser idénticas (salvo `block`, `stage` e `iteration`) a las filas `rules` de A de la
+  evaluación anterior: la iteración de anclaje o el A_rev de la ronda anterior sobre la misma
+  iteración. Cualquier diferencia detiene la ronda y queda un registro de fallo.
+
 ## Criterios de un bloque: `neuroeco pilot p1-criteria` (T4, D1)
 
 `neuroeco pilot p1-criteria --result <directorio>` evalúa un bloque publicado con
@@ -372,6 +406,11 @@ confirmó la vía E5 para la iteración N, y esa confirmación debe constar en s
   identificadores `/1`. Un resultado anterior a T3c (sin `config_files` ni `result_files`) no
   sirve como prerrequisito; no existe ninguno real.
 - **T4:** primera versión de `criteria.csv` y `neuroeco.p1-criteria-provenance/1`.
+- **T4c:** valores añadidos de `stage` (`round_prey`, `round_predator`, `A_rev`), campos
+  añadidos `round` y `phase` en la procedencia y en `failure.json` de las fases de una ronda, y
+  primera versión de `selection.json` (`neuroeco.p1-selection/1`). Se mantienen los
+  identificadores `/1` (D-T4c-6): los lectores existentes rechazan con un mensaje claro las
+  etapas que no evalúan (por ejemplo, `pilot p1-criteria` sobre una rejilla).
 - **Política (Mn-8):** cualquier cambio futuro incompatible (quitar o renombrar un campo, o
   cambiar su tipo o su significado) incrementará la versión del esquema (`/2`). Los lectores
   (T4) deben validar los campos que usan y no solo el identificador.

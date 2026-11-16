@@ -40,6 +40,7 @@ from neuroeco.analysis.calibration import (
     EPISODES_FILE,
     PROVENANCE_FILE,
     CriteriaError,
+    block_files,
     criteria_rows,
     evaluate_block,
     load_block,
@@ -212,7 +213,7 @@ def pilot_p1_criteria(
         checks = repository_checks(Path.cwd(), result)
         refuse_on_git(checks)
         block = load_block(result)
-        inputs = {name: file_sha256(result / name) for name in INPUT_FILES}
+        inputs = {name: file_sha256(result / name) for name in block_files(block.stage)}
         results = evaluate_block(block)
         met = requirements_met(block.stage, results)
         content = render_criteria(criteria_rows(results))

@@ -23,6 +23,7 @@ from neuroeco.analysis.calibration import (
     PROVENANCE_FILE,
     CriteriaError,
     Status,
+    block_files,
     criteria_rows,
     evaluate_block,
     load_block,
@@ -51,7 +52,6 @@ from neuroeco.presentation.pilot_p1 import (
 from neuroeco.presentation.pilot_p1_criteria import (
     CRITERIA_FILE,
     CRITERIA_PROVENANCE_FILE,
-    INPUT_FILES,
     render_criteria,
 )
 
@@ -82,7 +82,7 @@ def block_outcome(directory: Path, stage: str) -> Outcome:
             f"{label}: {CRITERIA_FILE} does not match the criteria recomputed from the block"
         )
     record = _json(directory / CRITERIA_PROVENANCE_FILE)
-    inputs = {name: file_sha256(directory / name) for name in INPUT_FILES}
+    inputs = {name: file_sha256(directory / name) for name in block_files(block.stage)}
     if (
         not isinstance(record, dict)
         or record.get("criteria_sha256") != file_sha256(criteria)
