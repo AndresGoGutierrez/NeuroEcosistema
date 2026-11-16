@@ -295,8 +295,9 @@ local, más que los ≈ 80 s estimados en ADR-032; no cambia ningún parámetro 
   una auditoría, con observaciones); T3c (correcciones de la auditoría de T3b) completada y
   validada en las comprobaciones automáticas (CI `43797566961` de `bb82864`, correcto en Ubuntu y
   Windows). T4 (evaluación de criterios, comando `pilot p1-criteria` y selección de P1-17)
-  completada; su validación automática se registra en la tabla de commits. T4b, T4c, T5 y la
-  ejecución de episodios de P1 no están autorizadas.
+  completada y validada en las comprobaciones automáticas (CI `43807682418` de `85c42af`,
+  correcto en Ubuntu y Windows, 802 pruebas), pendiente de la revisión del autor. T4b, T4c, T5 y
+  la ejecución de episodios de P1 no están autorizadas.
 - **Criterio de cierre (ADR-024):** criterios de ADR-020 (clase A completa en la confirmación;
   cada B cumplido o aceptado mediante ADR; cada C investigado y documentado), `p_flee` y
   `u_cruise` ajustados y congelados (ADR-012) y etiqueta `env-frozen-v1`.
@@ -513,10 +514,10 @@ necesitan resultados.
 | T3b correcciones de la auditoría de T3 | `8daa461` | `43790449030` ✅ |
 | T3c correcciones de la auditoría de T3b | `e4900ba` | `43795462046` ❌ (Windows; Ubuntu ✅) |
 | T3c corrección de la prueba de fin de línea | `bb82864` | `43797566961` ✅ (693 pruebas en Ubuntu y en Windows) |
-| T4-I1 criterios deterministas | `17818b5` | Publicado con I2 |
+| T4-I1 criterios deterministas | `17818b5` | Publicado con I2 (`43804513444` ✅) |
 | T4-I2 bootstrap, A6 y BCa descriptivo de B2 | `fa8b076` | `43804513444` ✅ (776 pruebas) |
-| T4-I3 comando `pilot p1-criteria` | `1b7f786` | Publicado con I4 |
-| T4-I4 selección de P1-17 y registro de T4 | ver el registro de cierre de T4 | CI del hito I4 |
+| T4-I3 comando `pilot p1-criteria` | `1b7f786` | Publicado con I4 (`43807682418` ✅) |
+| T4-I4 selección de P1-17 y registro de T4 | `85c42af` | `43807682418` ✅ (802 pruebas en Ubuntu y en Windows) |
 
 **Incidencias durante F4:**
 
