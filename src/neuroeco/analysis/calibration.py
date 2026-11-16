@@ -12,8 +12,9 @@ P1-16 table is computed from those files only (D14):
 - a null denominator makes the C2 or C4 part "not applicable"; any other invalid denominator
   stops the evaluation.
 
-A criterion is computed when its scenarios were executed (P1-18). The bootstrap criteria (A6 and
-the descriptive interval of B2) are a later increment of T4.
+A criterion is computed when its scenarios were executed (P1-18). The bootstrap (A6 and the
+descriptive BCa interval of B2) uses the generator rebuilt from the key recorded in
+``bootstrap_keys.csv`` (P1-1, P1-20) and the intervals of ``analysis.stats`` (ADR-032).
 
 ``analysis`` imports no other ``neuroeco`` layer (import-linter): the file contract below mirrors
 ``neuroeco.application.calibration`` and ``neuroeco.presentation.pilot_p1``, and a test checks
@@ -23,6 +24,7 @@ that both stay equal.
 from __future__ import annotations
 
 import csv
+import dataclasses
 import hashlib
 import json
 import math
@@ -33,7 +35,15 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import pandas as pd
+
+from neuroeco.analysis.stats import (
+    BootstrapInterval,
+    cliffs_delta,
+    cliffs_delta_bca,
+    paired_mean_bca,
+)
 
 # ---------------------------------------------------------------- mirrored file contract
 
@@ -181,7 +191,8 @@ class CriterionResult:
 
     ``scenario`` is ``A``, ``B`` or ``C``; ``B-A`` or ``C-A`` for a comparison between scenarios;
     empty for a property of the whole candidate (A1, A2, B7). ``value`` holds the exact computed
-    quantities and ``rule`` the condition that was applied.
+    quantities and ``rule`` the condition that was applied. ``interval`` is the BCa interval of
+    A6 (which decides it) and of B2 (descriptive only, P1-7); None for every other criterion.
     """
 
     criterion: str
@@ -190,6 +201,7 @@ class CriterionResult:
     status: Status
     value: str
     rule: str
+    interval: BootstrapInterval | None = None
 
     @property
     def criterion_class(self) -> str:
@@ -445,6 +457,7 @@ def _check_bootstrap_keys(block: Block) -> None:
     if [row["comparison"] for row in block.keys] != expected:
         raise CriteriaError(f"{BOOTSTRAP_FILE} must list the comparisons {expected}")
     for row in block.keys:
+        _project_seed(row)
         number = row["comparison"]
         wanted = {
             "comparison_name": COMPARISONS[number][0],
@@ -462,6 +475,39 @@ def _check_bootstrap_keys(block: Block) -> None:
                     f"{BOOTSTRAP_FILE} comparison {number}: {name} is {row[name]!r}, "
                     f"expected {value!r} (P1-20)"
                 )
+
+
+# ---------------------------------------------------------------- bootstrap generator (P1-20)
+
+PROJECT_SEED_LIMIT = 2**128  # ADR-028: 0 < project_seed < 2**128
+
+
+def _project_seed(row: Row) -> int:
+    """The 128-bit project seed, recorded as canonical decimal text (ADR-023)."""
+    text = row["project_seed"]
+    if not (text.isascii() and text.isdecimal()) or text != str(int(text)):
+        raise CriteriaError(f"{BOOTSTRAP_FILE}: project_seed {text!r} is not a decimal integer")
+    seed = int(text)
+    if not 0 < seed < PROJECT_SEED_LIMIT:
+        raise CriteriaError(f"{BOOTSTRAP_FILE}: project_seed outside (0, 2**128)")
+    return seed
+
+
+def bootstrap_generator(row: Row) -> np.random.Generator:
+    """The generator of one ``bootstrap_keys.csv`` row, as ``SeedRegistry.generator`` builds it.
+
+    ``SeedSequence(project_seed, spawn_key=(purpose, seed_group, run, generation, item, stream))``
+    with PCG64 (``default_rng``): no global state, nothing derived from Python's hashing.
+    """
+    key = tuple(int(row[name]) for name in KEY_FIELDS)
+    return np.random.default_rng(np.random.SeedSequence(_project_seed(row), spawn_key=key))
+
+
+def _key_row(block: Block, comparison: int) -> Row:
+    rows = [row for row in block.keys if row["comparison"] == comparison]
+    if len(rows) != 1:
+        raise CriteriaError(f"{BOOTSTRAP_FILE} must hold comparison {comparison} exactly once")
+    return rows[0]
 
 
 # ---------------------------------------------------------------- exact helpers
@@ -842,11 +888,8 @@ def _scenario_c(block: Block) -> list[CriterionResult]:
     ]
 
 
-def evaluate_block(block: Block) -> tuple[CriterionResult, ...]:
-    """Every deterministic criterion computable with the scenarios of the block (P1-18).
-
-    A6 and the descriptive BCa interval of B2 need the bootstrap (a later increment of T4).
-    """
+def deterministic_criteria(block: Block) -> tuple[CriterionResult, ...]:
+    """Every criterion that needs no bootstrap, for the scenarios of the block (P1-18)."""
     results = _a1_a2_b7(block)
     for scenario in block.scenarios:
         results.extend(_per_scenario(block, scenario))
@@ -855,6 +898,78 @@ def evaluate_block(block: Block) -> tuple[CriterionResult, ...]:
         results.extend(_scenario_b(block))
     if "C" in block.scenarios:
         results.extend(_scenario_c(block))
+    return tuple(results)
+
+
+# ---------------------------------------------------------------- bootstrap criteria (A6, B2)
+
+A6_COMPARISONS: Mapping[str, int] = {"B": 1, "C": 2}  # P1-20: delta(B, A) and delta(C, A)
+B2_COMPARISONS: Mapping[tuple[str, str], int] = {
+    ("prey", "A"): 3,
+    ("prey", "B"): 4,
+    ("prey", "C"): 5,
+    ("predator", "A"): 6,
+    ("predator", "B"): 7,
+    ("predator", "C"): 8,
+}
+_B2_PAIRS = {"prey": (RANDOM_PREY, survival), "predator": (RANDOM_PREDATOR, captured_fraction)}
+
+
+def a6_decision(delta: Fraction, interval: BootstrapInterval) -> tuple[Status, str]:
+    """A6 for one comparison (ADR-020, P1-16, D1); no tolerance on the sign.
+
+    - BCa estimable: met if and only if the upper limit is < 0;
+    - BCa not estimable with delta = -1 (complete separation): every bootstrap replicate is -1,
+      the interval is {-1} and A6 is met (D1);
+    - any other interval that is not estimable: A6 is not met.
+    """
+    if interval.estimable:
+        holds = interval.upper is not None and interval.upper < 0
+        return _verdict(holds), f"BCa [{interval.lower!r}, {interval.upper!r}]"
+    if delta == -1:
+        return Status.PASS, "BCa not estimable; degenerate interval {-1} (D1)"
+    return Status.FAIL, "BCa not estimable"
+
+
+def _a6(block: Block, scenario: str) -> CriterionResult:
+    sample = [float(survival(r)) for r in block.condition(scenario, RULES)]
+    reference = [float(survival(r)) for r in block.condition("A", RULES)]
+    delta = cliffs_delta(sample, reference)
+    rng = bootstrap_generator(_key_row(block, A6_COMPARISONS[scenario]))
+    interval = cliffs_delta_bca(sample, reference, rng)
+    status, text = a6_decision(delta, interval)
+    return CriterionResult(
+        "A6",
+        "",
+        f"{scenario}-A",
+        status,
+        f"Cliff's delta({scenario}, A) = {delta}; {text}",
+        "upper limit of the unpaired 95 % BCa interval (9999 resamples) < 0; "
+        "{-1} when not estimable with delta = -1 (D1)",
+        interval,
+    )
+
+
+def _b2_interval(block: Block, result: CriterionResult) -> CriterionResult:
+    """B2 keeps its verdict (the sum of the paired differences); the BCa is descriptive (P1-7)."""
+    other, metric = _B2_PAIRS[result.part]
+    differences = [
+        float(metric(r) - metric(o)) for r, o in paired(block, result.scenario, RULES, other)
+    ]
+    rng = bootstrap_generator(_key_row(block, B2_COMPARISONS[(result.part, result.scenario)]))
+    return dataclasses.replace(result, interval=paired_mean_bca(differences, rng))
+
+
+def evaluate_block(block: Block) -> tuple[CriterionResult, ...]:
+    """Every criterion computable with the scenarios of the block (P1-18), bootstrap included.
+
+    The deterministic results are those of ``deterministic_criteria``; the B2 rows only gain
+    their descriptive interval and A6 is added for each executed scenario B or C.
+    """
+    results = [
+        _b2_interval(block, r) if r.criterion == "B2" else r for r in deterministic_criteria(block)
+    ]
+    results.extend(_a6(block, s) for s in A6_COMPARISONS if s in block.scenarios)
     return tuple(results)
 
 

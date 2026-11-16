@@ -1,13 +1,18 @@
-"""F4 T4 (I1): deterministic P1 criteria from the published files (ADR-033 P1-16, P1-18).
+"""F4 T4 (I1, I2): P1 criteria from the published files (ADR-033 P1-16, P1-18, P1-20).
 
 Every block is synthetic and written in memory with the exact format of ``neuroeco pilot p1``
 (seed groups >= 1000, D16); no episode is run here. The default block meets every criterion and
-raises no alert; each test changes only what it checks.
+raises no alert; each test changes only what it checks. Bootstrap tests check properties and
+contracts, never BCa limits that could differ between platforms.
 """
 
 import csv
+import dataclasses
 import hashlib
 import json
+import os
+import subprocess
+import sys
 from collections.abc import Callable
 from fractions import Fraction
 from pathlib import Path
@@ -15,9 +20,9 @@ from pathlib import Path
 import pytest
 
 from neuroeco.analysis import calibration as crit
-from neuroeco.analysis.stats import iqr
+from neuroeco.analysis.stats import BootstrapInterval, iqr
 from neuroeco.application import calibration as app
-from neuroeco.application.seeding import Purpose, Stream
+from neuroeco.application.seeding import Purpose, SeedRegistry, Stream
 from neuroeco.presentation import pilot_p1
 
 T_MAX, EPISODES, N_PREY, N_PREDATORS = 40, 4, 10, 2
@@ -52,7 +57,9 @@ Edit = Callable[[dict], None]
 def base_row(stage: str, scenario: str, condition: str, item: int) -> dict:
     """A plausible episode that meets every criterion and raises no alert."""
     block, iteration = STAGE_INFO[stage]
-    captured, starved, numerator = 2 + item % 2, 1, 200 + 10 * item
+    captured, starved, numerator = 2 + item % 2, 1, 200 + 10 * (item % 4)
+    if scenario in ("B", "C"):
+        numerator -= 100  # A6: lower survival in B and C (complete separation from A)
     predators = {"n": N_PREDATORS, "starved": 0}
     if condition == "rules" and scenario == "B":
         starved = 2  # A4 (c): more starvation in B
@@ -119,6 +126,7 @@ def write_block(
     stage: str = "entry",
     edit: Edit | None = None,
     provenance_edit: Edit | None = None,
+    episodes: int = EPISODES,
 ) -> Path:
     """A published block of ``stage``; ``edit`` changes rows, ``provenance_edit`` the record."""
     directory.mkdir(parents=True)
@@ -128,7 +136,7 @@ def write_block(
         base_row(stage, s, c.name, item)
         for s in scenarios
         for c in app.CONDITIONS_BY_SCENARIO[s]
-        for item in range(EPISODES)
+        for item in range(episodes)
     ]
     for row in rows:
         if edit:
@@ -153,7 +161,7 @@ def write_block(
         "iteration": iteration,
         "bootstrap_run": iteration,
         "scenarios": list(scenarios),
-        "episodes_per_condition": EPISODES,
+        "episodes_per_condition": episodes,
         "episodes_planned": len(rows),
         "episodes_written": len(rows),
         "project_seed": SEED,
@@ -191,6 +199,12 @@ def rewrite(directory: Path, name: str, change: Callable[[str], str]) -> None:
 
 
 def evaluate(directory: Path) -> dict[tuple[str, str, str], crit.CriterionResult]:
+    """The deterministic criteria (I1 tests: no bootstrap needed)."""
+    return {r.key: r for r in crit.deterministic_criteria(crit.load_block(directory))}
+
+
+def evaluate_all(directory: Path) -> dict[tuple[str, str, str], crit.CriterionResult]:
+    """Every criterion, bootstrap included."""
     return {r.key: r for r in crit.evaluate_block(crit.load_block(directory))}
 
 
@@ -253,8 +267,13 @@ SCENARIO_A_KEYS = {
     ("C4", "starvation_share", "A"),
     ("C4", "few_captures", "A"),
 }
-SCENARIO_B_KEYS = {("A4", "c", "B-A"), ("B4", "i", "B-A"), ("B4", "ii", "B-A")}
-SCENARIO_C_KEYS = {("A4", "d", "C-A"), ("B5", "", "C-A")}
+SCENARIO_B_KEYS = {
+    ("A4", "c", "B-A"),
+    ("B4", "i", "B-A"),
+    ("B4", "ii", "B-A"),
+    ("A6", "", "B-A"),
+}
+SCENARIO_C_KEYS = {("A4", "d", "C-A"), ("B5", "", "C-A"), ("A6", "", "C-A")}
 CANDIDATE_KEYS = {("A1", "", ""), ("A2", "", ""), ("B7", "", "")}
 
 
@@ -292,24 +311,23 @@ CANDIDATE_KEYS = {("A1", "", ""), ("A2", "", ""), ("B7", "", "")}
 )
 def test_criteria_are_computed_when_their_scenarios_ran(tmp_path, stage, expected) -> None:
     """P1-18: the criteria of each stage; the default block meets all of them, no alert."""
-    results = evaluate(write_block(tmp_path / "block", stage))
+    results = evaluate_all(write_block(tmp_path / "block", stage))
     assert set(results) == expected
     assert {r.status for r in results.values()} <= {crit.Status.PASS, crit.Status.NO_ALERT}
 
 
 def test_stage_requirements(tmp_path) -> None:
-    """S_A, S_B, S_C and the whole class A; A6 belongs to the bootstrap increment."""
-    assert crit.requirements_met("A", evaluate(write_block(tmp_path / "a", "A")).values())
-    results = evaluate(write_block(tmp_path / "b", "B"))
+    """S_A, S_B, S_C and the whole class A; A6 is required wherever B or C ran."""
+    assert crit.requirements_met("A", evaluate_all(write_block(tmp_path / "a", "A")).values())
+    block_b = write_block(tmp_path / "b", "B")
     with pytest.raises(crit.CriteriaError, match="A6"):
-        crit.requirements_met("B", results.values())
-    a6 = crit.CriterionResult("A6", "", "B-A", crit.Status.PASS, "", "")
-    assert crit.requirements_met("B", [*results.values(), a6])
+        crit.requirements_met("B", evaluate(block_b).values())  # without the bootstrap
+    assert crit.requirements_met("B", evaluate_all(block_b).values())
     failing = write_block(tmp_path / "b2", "B", where("B", "rules", prey_survival_numerator=1))
-    assert not crit.requirements_met("B", [*evaluate(failing).values(), a6])
-    entry = evaluate(write_block(tmp_path / "e", "entry"))
-    with pytest.raises(crit.CriteriaError, match="A6"):
-        crit.requirements_met("entry", entry.values())
+    assert not crit.requirements_met("B", evaluate_all(failing).values())  # A3 in B fails
+    assert crit.requirements_met("C", evaluate_all(write_block(tmp_path / "c", "C")).values())
+    entry = evaluate_all(write_block(tmp_path / "e", "entry"))
+    assert crit.requirements_met("entry", entry.values())
 
 
 # ---------------------------------------------------------------- exact boundaries
@@ -348,7 +366,7 @@ BOUNDARIES = [
     # C1: a probe equal to rules raises the alert
     (
         ("C1", "prey_probe_SPIN", "C"),
-        where("C", "prey_probe_SPIN", prey_survival_numerator=[200, 210, 220, 230]),
+        where("C", "prey_probe_SPIN", prey_survival_numerator=[100, 110, 120, 130]),
         "alert",
     ),
     # C2: 10 captures in A; 1 early is exactly 1/10, 2 are more
@@ -612,3 +630,148 @@ def test_a_rules_condition_without_predators_stops_b3(tmp_path) -> None:
     )
     with pytest.raises(crit.CriteriaError, match="B3 needs predators"):
         crit.evaluate_block(crit.load_block(write_block(tmp_path / "block", "A", edit)))
+
+
+# ---------------------------------------------------------------- bootstrap (I2)
+
+
+def test_the_rebuilt_generator_is_the_registry_generator(tmp_path) -> None:
+    """P1-20: each key row rebuilds exactly ``SeedRegistry.generator`` of its comparison."""
+    block = crit.load_block(write_block(tmp_path / "block", "B"))
+    registry = SeedRegistry(int(SEED))
+    states = []
+    for row in block.keys:
+        expected = registry.generator(
+            Purpose.ANALYSIS, GROUPS["A"], 2, 0, row["comparison"], Stream.BOOTSTRAP
+        )
+        state = crit.bootstrap_generator(row).bit_generator.state
+        assert state == expected.bit_generator.state
+        states.append(str(state))
+    assert len(set(states)) == len(states) == 5  # comparisons 1, 3, 4, 6, 7 of stage B
+
+
+SCRIPT = """
+import json, sys
+from pathlib import Path
+from neuroeco.analysis import calibration as crit
+results = crit.evaluate_block(crit.load_block(Path(sys.argv[1])))
+print(json.dumps([repr(r) for r in results]))
+"""
+
+
+def test_bootstrap_results_are_reproducible_across_processes(tmp_path) -> None:
+    """Same intervals in this process, again, and under two other PYTHONHASHSEED values."""
+    directory = write_block(tmp_path / "block", "entry")
+    here = [repr(r) for r in crit.evaluate_block(crit.load_block(directory))]
+    assert here == [repr(r) for r in crit.evaluate_block(crit.load_block(directory))]
+    for hash_seed in ("0", "4242"):
+        completed = subprocess.run(
+            [sys.executable, "-c", SCRIPT, str(directory)],
+            capture_output=True,
+            encoding="utf-8",
+            check=True,
+            env={**os.environ, "PYTHONHASHSEED": hash_seed},
+        )
+        assert json.loads(completed.stdout) == here
+
+
+def interval(lower: float | None, upper: float | None) -> BootstrapInterval:
+    return BootstrapInterval(-0.5, lower, upper, lower is not None, 0.95, 9999)
+
+
+@pytest.mark.parametrize(
+    ("delta", "bca", "expected"),
+    [
+        (Fraction(-1, 2), interval(-0.8, -0.01), "pass"),
+        (Fraction(-1, 2), interval(-0.8, 0.0), "fail"),  # 0 is not excluded: no tolerance
+        (Fraction(-1, 2), interval(-0.8, 0.2), "fail"),
+        (Fraction(-1), interval(None, None), "pass"),  # D1: degenerate interval {-1}
+        (Fraction(0), interval(None, None), "fail"),
+        (Fraction(1), interval(None, None), "fail"),
+    ],
+)
+def test_the_a6_decision_rule(delta, bca, expected) -> None:
+    status, text = crit.a6_decision(delta, bca)
+    assert status == expected
+    assert ("{-1}" in text) == (delta == -1 and not bca.estimable)
+
+
+def a6_case(tmp_path, b_numerators, a_numerators=None, episodes=EPISODES):
+    def edit(row: dict) -> None:
+        values = {"B": b_numerators, "A": a_numerators}.get(row["scenario"])
+        if row["condition"] == "rules" and values is not None:
+            row["prey_survival_numerator"] = values[row["item"]]
+
+    directory = write_block(tmp_path / "block", "B", edit, episodes=episodes)
+    return evaluate_all(directory)[("A6", "", "B-A")]
+
+
+def test_a6_with_complete_separation_uses_the_degenerate_interval(tmp_path) -> None:
+    """Default block: every B episode survives less than every A episode (delta = -1)."""
+    result = a6_case(tmp_path, [100, 110, 120, 130])
+    assert result.status == "pass" and not result.interval.estimable
+    assert "delta(B, A) = -1" in result.value and "{-1}" in result.value
+
+
+@pytest.mark.parametrize(
+    ("b_numerators", "a_numerators", "message"),
+    [
+        ([300, 310, 320, 330], None, "delta(B, A) = 1;"),  # separation in the wrong direction
+        ([200, 210, 220, 230], None, "delta(B, A) = 0;"),  # same distribution
+        ([210] * 4, [210] * 4, "BCa not estimable"),  # degenerate samples
+    ],
+)
+def test_a6_fails_without_a_lower_survival_in_b(tmp_path, b_numerators, a_numerators, message):
+    result = a6_case(tmp_path, b_numerators, a_numerators)
+    assert result.status == "fail" and message in result.value
+
+
+def test_a6_with_an_estimable_interval(tmp_path) -> None:
+    """30 episodes per sample with overlap: the BCa is estimable and its upper limit < 0."""
+    result = a6_case(
+        tmp_path, [100 + 5 * i for i in range(30)], [150 + 5 * i for i in range(30)], episodes=30
+    )
+    assert result.interval.estimable and result.interval.upper < 0
+    assert result.status == "pass"
+
+
+def test_the_b2_interval_is_descriptive(tmp_path) -> None:
+    """D3 scales; the verdict stays the sign of the sum of the paired differences (P1-7)."""
+    directory = write_block(tmp_path / "block", "entry")
+    block = crit.load_block(directory)
+    deterministic = crit.deterministic_criteria(block)
+    full = crit.evaluate_block(block)
+    assert [dataclasses.replace(r, interval=None) for r in full if r.criterion != "A6"] == list(
+        deterministic
+    )
+    assert {r.criterion for r in full if r.interval is not None} == {"A6", "B2"}
+    results = {r.key: r for r in full}
+    prey, predator = results[("B2", "prey", "A")], results[("B2", "predator", "A")]
+    assert (prey.interval.resamples, prey.interval.confidence) == (9999, 0.95)
+    assert prey.interval.estimate == pytest.approx(0.25)  # survival: 100 / 400 per pair
+    assert predator.interval.estimate == pytest.approx(0.25)  # captured: (2, 3, 2, 3) / 10
+    # A positive sum with mostly negative differences: B2 is met whatever the interval says.
+    skewed = where("A", "random_prey", prey_survival_numerator=[240, 250, 260, 100])
+    result = evaluate_all(write_block(tmp_path / "skewed", "entry", skewed))[("B2", "prey", "A")]
+    assert result.status == "pass" and result.value == "1/40"
+    assert result.interval.lower is None or result.interval.lower < 0
+
+
+@pytest.mark.parametrize(
+    ("change", "seed", "message"),
+    [
+        (lambda text: text.replace(text.splitlines()[1] + "\n", ""), SEED, "comparisons"),
+        (lambda text: text + text.splitlines()[1] + "\n", SEED, "comparisons"),
+        (lambda text: text.replace(SEED, "0" + SEED), "0" + SEED, "not a decimal integer"),
+        (lambda text: text.replace(SEED, str(2**128)), str(2**128), r"outside \(0, 2\*\*128\)"),
+    ],
+)
+def test_missing_duplicated_or_invalid_keys_stop_the_evaluation(
+    tmp_path, change, seed, message
+) -> None:
+    directory = write_block(
+        tmp_path / "block", "B", provenance_edit=lambda r: r.update(project_seed=seed)
+    )
+    rewrite(directory, "bootstrap_keys.csv", change)
+    with pytest.raises(crit.CriteriaError, match=message):
+        crit.load_block(directory)
