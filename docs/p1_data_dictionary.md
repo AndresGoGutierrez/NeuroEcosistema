@@ -316,6 +316,9 @@ no estimable con δ = −1 es el intervalo degenerado {−1} y se cumple (D1), y
 no estimable no se cumple. El generador de cada intervalo se reconstruye de su fila de
 `bootstrap_keys.csv` exactamente como `SeedRegistry.generator`.
 
+La selección del ganador de cada rejilla de una ronda (P1-17) no escribe archivos en T4: es una
+función pura (`select_prey`, `select_predator`) que T4c usará sobre las filas de `rules` en A.
+
 ### `criteria_provenance.json`
 
 `schema` (`neuroeco.p1-criteria-provenance/1`), `timestamp_utc`, `command`,

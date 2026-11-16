@@ -973,6 +973,118 @@ def evaluate_block(block: Block) -> tuple[CriterionResult, ...]:
     return tuple(results)
 
 
+# ---------------------------------------------------------------- grid selection (P1-17, D4)
+
+
+@dataclass(frozen=True)
+class GridSelection:
+    """The winner of one grid of a round (P1-4, P1-17).
+
+    ``totals`` holds the objective of every combination (all are recorded, P1-4); ``tied`` the
+    combinations with the best total; ``rule`` how the winner was chosen: ``unique``,
+    ``current`` (tie rule 1), ``lowest u_cruise`` (rule 2) or ``lowest p_flee`` (rule 3).
+    """
+
+    parameters: tuple[str, ...]
+    winner: tuple[float, ...]
+    objective: int
+    tied: tuple[tuple[float, ...], ...]
+    rule: str
+    totals: Mapping[tuple[float, ...], int]
+
+
+PREY_GRID_PARAMETERS = ("prey_flee_threshold", "prey_cruise_fraction")
+PREDATOR_GRID_PARAMETERS = ("predator_cruise_fraction",)
+
+
+def _grid_totals(
+    rows: Sequence[Row],
+    parameters: tuple[str, ...],
+    combinations: Sequence[tuple[float, ...]],
+    objective: str,
+) -> dict[tuple[float, ...], int]:
+    """Sum of ``objective`` per combination, after checking that the grid is complete.
+
+    A round uses only the ``rules`` condition in scenario A with one seed group (P1-17); every
+    combination must hold exactly the same episodes, and every value outside the grid must be
+    the same in all rows. Anything else stops the selection.
+    """
+    if len(set(combinations)) != len(combinations):
+        raise CriteriaError("the grid declares a combination twice")
+    if not rows:
+        raise CriteriaError("no episodes for the grid")
+    if any(r["scenario"] != "A" or r["condition"] != RULES for r in rows):
+        raise CriteriaError("a round uses only the rules condition of scenario A (P1-17)")
+    if len({r["seed_group"] for r in rows}) != 1:
+        raise CriteriaError("a round uses one seed group (P1-17)")
+    fixed = [name for name in CANDIDATE_PARAMETERS if name not in parameters]
+    if len({tuple(r[name] for name in fixed) for r in rows}) != 1:
+        raise CriteriaError(f"the values outside the grid must not change: {fixed}")
+    items: dict[tuple[float, ...], list[int]] = {}
+    totals: dict[tuple[float, ...], int] = {}
+    for row in rows:
+        combination = tuple(row[name] for name in parameters)
+        if combination not in combinations:
+            raise CriteriaError(f"combination {combination} is not in the grid")
+        items.setdefault(combination, []).append(row["item"])
+        totals[combination] = totals.get(combination, 0) + row[objective]
+    missing = [c for c in combinations if c not in items]
+    if missing:
+        raise CriteriaError(f"combinations without episodes: {missing}")
+    reference = sorted(items[combinations[0]])
+    for combination, found in items.items():
+        if len(found) != len(set(found)):
+            raise CriteriaError(f"combination {combination} has a duplicated episode")
+        if sorted(found) != reference:
+            raise CriteriaError(f"combination {combination} does not have the same episodes")
+    return {c: totals[c] for c in combinations}
+
+
+def _select(
+    parameters: tuple[str, ...],
+    totals: Mapping[tuple[float, ...], int],
+    current: tuple[float, ...],
+) -> GridSelection:
+    """Exact integer comparison; ties: current, then lowest u_cruise, then lowest p_flee."""
+    best = max(totals.values())
+    tied = tuple(c for c, total in totals.items() if total == best)
+    # u_cruise is the last value of each combination; p_flee (prey only) the first.
+    if len(tied) == 1:
+        winner, rule = tied[0], "unique"
+    elif current in tied:
+        winner, rule = current, "current"
+    else:
+        winner = min(tied, key=lambda c: (c[-1], *c[:-1]))
+        lowest = [c for c in tied if c[-1] == winner[-1]]
+        rule = "lowest u_cruise" if len(lowest) == 1 else "lowest p_flee"
+    return GridSelection(parameters, winner, best, tied, rule, dict(totals))
+
+
+def select_prey(
+    rows: Sequence[Row],
+    flee_grid: Sequence[float],
+    cruise_grid: Sequence[float],
+    current: tuple[float, float],
+) -> GridSelection:
+    """P1-17, prey: the (p_flee, u_cruise) with the largest sum of survival numerators.
+
+    ``rows`` are the ``rules`` episodes of scenario A of the 12 combinations (episodes.csv
+    columns); ``current`` is the combination in force before the round.
+    """
+    combinations = [(p, u) for p in flee_grid for u in cruise_grid]
+    totals = _grid_totals(rows, PREY_GRID_PARAMETERS, combinations, "prey_survival_numerator")
+    return _select(PREY_GRID_PARAMETERS, totals, tuple(current))
+
+
+def select_predator(
+    rows: Sequence[Row], cruise_grid: Sequence[float], current: float
+) -> GridSelection:
+    """P1-17, predator: the u_cruise with the largest sum of captures (prey already chosen)."""
+    combinations = [(u,) for u in cruise_grid]
+    totals = _grid_totals(rows, PREDATOR_GRID_PARAMETERS, combinations, "prey_captured")
+    return _select(PREDATOR_GRID_PARAMETERS, totals, (current,))
+
+
 # ---------------------------------------------------------------- criteria.csv (T4-I3, D1)
 
 CRITERIA_COLUMNS = (

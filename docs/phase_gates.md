@@ -290,11 +290,13 @@ local, más que los ≈ 80 s estimados en ADR-032; no cambia ningún parámetro 
 ## F4: P1, calibración ecológica
 
 - **Inicio:** 2026-11-15, con autorización expresa del autor limitada a T0; después, T0b, T1, T2,
-  T3, T3b y T3c, cada una autorizada por separado.
+  T3, T3b, T3c y T4 (en los incrementos I1–I4), cada una autorizada por separado.
 - **Estado:** 🔄 En curso. T0, T0b, T1, T2, T3 y T3b aprobadas por el autor (T2, T3 y T3b tras
   una auditoría, con observaciones); T3c (correcciones de la auditoría de T3b) completada y
   validada en las comprobaciones automáticas (CI `43797566961` de `bb82864`, correcto en Ubuntu y
-  Windows). T4, T4b, T5 y la ejecución de episodios de P1 no están autorizadas.
+  Windows). T4 (evaluación de criterios, comando `pilot p1-criteria` y selección de P1-17)
+  completada; su validación automática se registra en la tabla de commits. T4b, T4c, T5 y la
+  ejecución de episodios de P1 no están autorizadas.
 - **Criterio de cierre (ADR-024):** criterios de ADR-020 (clase A completa en la confirmación;
   cada B cumplido o aceptado mediante ADR; cada C investigado y documentado), `p_flee` y
   `u_cruise` ajustados y congelados (ADR-012) y etiqueta `env-frozen-v1`.
@@ -350,6 +352,31 @@ confirmación (con autorización expresa) · congelamiento (P1-2, ADR de valores
 desempate de P1-17 a partir de los CSV (lo que implementa T4), la rejilla del depredador con ese
 ganador y la reevaluación A_rev. Va después de T4 porque necesita la selección sobre resultados;
 T3 no ejecuta rondas.
+
+**T4 (evaluación de los criterios desde los CSV; detalle en
+[p1_data_dictionary.md](p1_data_dictionary.md)).** `analysis/calibration.py` (P1-10) lee un
+bloque publicado, verifica su integridad (SHA-256 de `result_files`, bloque completo sin
+violación A2, claves de P1-13 y P1-20, recuentos coherentes) y calcula todos los criterios de
+P1-16 con aritmética exacta (D14), solo para los escenarios ejecutados (P1-18), además de S_A,
+S_B, S_C y la clase A completa. A6 usa el BCa sin emparejar con la regla {−1} de D1 y B2 un BCa
+solo descriptivo, ambos con el generador reconstruido de `bootstrap_keys.csv`, idéntico al de
+`SeedRegistry`. `analysis` no importa otras capas: el contrato de archivos se replica y una
+prueba lo mantiene igual al de `application` y del comando.
+
+| ID | Decisión del autor |
+|---|---|
+| D1 | Subcomando independiente `neuroeco pilot p1-criteria --result <dir>`, que escribe `criteria.csv` y `criteria_provenance.json` dentro del bloque; mismas comprobaciones de git que `pilot p1`, con los archivos del bloque evaluado como únicos sin versionar admitidos (resultados y criterios en un solo commit, P1-19); sin sobrescritura salvo salida idéntica |
+| D2 | En C4, "Σ muertes" son solo las de presas: capturadas más muertas de inanición |
+| D3 | El BCa descriptivo de B2 usa las métricas primarias de ADR-014: diferencia de supervivencia (presa) y de fracción capturada (depredador) |
+| D4 | La selección del ganador de P1-17 forma parte de T4 como función pura (`select_prey`, `select_predator`); su ejecución corresponde a T4c |
+| D5 | Un commit por incremento; publicación y CI solo en los hitos I2 e I4 |
+
+Selección de P1-17: objetivo entero (Σ numeradores de supervivencia de la presa; Σ capturas del
+depredador) sobre los episodios `rules` de A con un solo grupo de semillas; se registran los
+totales de todas las combinaciones (P1-4); empates exactos: combinación vigente, menor
+`u_cruise`, menor `p_flee`. Una rejilla incompleta, con episodios duplicados o distintos entre
+combinaciones, con valores fuera de la rejilla o con otros parámetros cambiados detiene la
+selección.
 
 **Decisiones de T3 (aprobadas por el autor; detalle en
 [p1_data_dictionary.md](p1_data_dictionary.md)):**
@@ -486,6 +513,10 @@ necesitan resultados.
 | T3b correcciones de la auditoría de T3 | `8daa461` | `43790449030` ✅ |
 | T3c correcciones de la auditoría de T3b | `e4900ba` | `43795462046` ❌ (Windows; Ubuntu ✅) |
 | T3c corrección de la prueba de fin de línea | `bb82864` | `43797566961` ✅ (693 pruebas en Ubuntu y en Windows) |
+| T4-I1 criterios deterministas | `17818b5` | Publicado con I2 |
+| T4-I2 bootstrap, A6 y BCa descriptivo de B2 | `fa8b076` | `43804513444` ✅ (776 pruebas) |
+| T4-I3 comando `pilot p1-criteria` | `1b7f786` | Publicado con I4 |
+| T4-I4 selección de P1-17 y registro de T4 | ver el registro de cierre de T4 | CI del hito I4 |
 
 **Incidencias durante F4:**
 
