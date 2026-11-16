@@ -289,9 +289,10 @@ local, más que los ≈ 80 s estimados en ADR-032; no cambia ningún parámetro 
 
 ## F4: P1, calibración ecológica
 
-- **Inicio:** 2026-11-15, con autorización expresa del autor limitada a T0; después, T0b y T1.
-- **Estado:** 🔄 En curso. T0 y T0b cerradas tras la revisión del autor; T1 (especificación y
-  cargador de P1) completada y pendiente de revisión. T2 y la ejecución de episodios no están
+- **Inicio:** 2026-11-15, con autorización expresa del autor limitada a T0; después, T0b, T1 y
+  T2, cada una autorizada por separado.
+- **Estado:** 🔄 En curso. T0, T0b y T1 aprobadas por el autor; T2 (comprobador A2 y ejecución
+  por bloques) completada y pendiente de revisión. T3 y la ejecución de episodios de P1 no están
   autorizadas.
 - **Criterio de cierre (ADR-024):** criterios de ADR-020 (clase A completa en la confirmación;
   cada B cumplido o aceptado mediante ADR; cada C investigado y documentado), `p_flee` y
@@ -370,6 +371,7 @@ necesitan resultados.
 | T0b corrección de ADR-033 tras la auditoría (D1–D18, P1-23, P1-24) | `50c8a1d` | `43774119505` ✅ |
 | T0b precisión de P1-13 (columnas de clave) | `e3dcd13` | `43775574419` ✅ |
 | T0b precisión de P1-16 (remisión a P1-13) | `38e1803` | `43776616239` ✅ |
+| T1 especificación y cargador de P1 | `1bd2c4d` | `43778824799` ✅ |
 
 **Incidencias durante F4:**
 

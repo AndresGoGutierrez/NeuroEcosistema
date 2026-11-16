@@ -1,6 +1,6 @@
-"""Pilot P1 (ecological calibration) specification: ADR-020 and ADR-033.
+"""Pilot P1 (ecological calibration): ADR-020 and ADR-033.
 
-This module holds the P1 data model and the checks that need no episode results:
+Specification (F4 T1), with no episode results needed:
 
 - the block specification (episodes and declared ``seed_group`` per scenario, P1-5, P1-13);
 - the catalogue of the 35 conditions of a block (P1-14);
@@ -10,9 +10,14 @@ This module holds the P1 data model and the checks that need no episode results:
 - the episode key columns (P1-13) and the bootstrap keys (P1-20);
 - the static validation of a sequence of iteration and round specifications.
 
+Execution (F4 T2):
+
+- the A2 invariant checker, a read-only observer of the simulation (P1-22);
+- the planning and the execution of the episodes of a block.
+
 Checks that depend on results (S_A met, "unsuccessful" iterations in D9, alternations caused by a
-failed re-evaluation) belong to the calibration sequence verifier (task T4b). No function here
-runs episodes.
+failed re-evaluation) belong to the calibration sequence verifier (task T4b). Writing CSV files
+and provenance belongs to the ``pilot p1`` command (task T3).
 """
 
 from __future__ import annotations
@@ -20,13 +25,26 @@ from __future__ import annotations
 import dataclasses
 import itertools
 import math
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from enum import IntEnum
 
-from neuroeco.application.seeding import Purpose, Stream, make_key
-from neuroeco.domain.params import ConstraintCheck, WorldParams, calibration_checks
-from neuroeco.domain.policies import PROBE_NAMES
+import numpy as np
+
+from neuroeco.application.configs import ResolvedConfig
+from neuroeco.application.evaluation import EpisodeIdentity, EpisodeResult, run_episode
+from neuroeco.application.seeding import Purpose, SeedRegistry, Stream, make_key
+from neuroeco.application.session import initial_world
+from neuroeco.domain.geometry import pairwise_distances
+from neuroeco.domain.params import (
+    ConstraintCheck,
+    SpeciesParams,
+    WorldParams,
+    calibration_checks,
+)
+from neuroeco.domain.policies import PROBE_NAMES, Policy
+from neuroeco.domain.simulator import StepTrace
+from neuroeco.domain.state import DeathCause, SpeciesState, WorldState
 
 PILOT_NAME = "P1"
 SCENARIOS = ("A", "B", "C")
@@ -606,4 +624,301 @@ def bootstrap_key(block: BlockSpec, run: int, comparison: Comparison) -> tuple[i
         raise ValueError(f"comparison must be a Comparison member, got {comparison!r}")
     return make_key(
         Purpose.ANALYSIS, block.seed_groups.a, run, 0, int(comparison), Stream.BOOTSTRAP
+    )
+
+
+# ---------------------------------------------------------------- A2 invariant checker (P1-22)
+
+SAFE_DISTANCE = "safe_distance_at_s0"
+PREY_IDENTITY = "prey_identity"
+PREDATOR_IDENTITY = "predator_identity"
+PREY_ENERGY = "prey_energy"
+PREDATOR_ENERGY = "predator_energy"
+FIRST_STEP_CAPTURE = "no_capture_in_first_step"
+A2_INVARIANTS = (
+    SAFE_DISTANCE,
+    PREY_IDENTITY,
+    PREDATOR_IDENTITY,
+    PREY_ENERGY,
+    PREDATOR_ENERGY,
+    FIRST_STEP_CAPTURE,
+)
+
+
+class InvariantViolationError(RuntimeError):
+    """An A2 invariant does not hold. ``step`` is None for the initial state S_0."""
+
+    def __init__(self, invariant: str, step: int | None, detail: str) -> None:
+        where = "S0" if step is None else f"step {step}"
+        super().__init__(f"A2 violated ({invariant}) at {where}: {detail}")
+        self.invariant = invariant
+        self.step = step
+        self.detail = detail
+
+
+class InvariantChecker:
+    """Read-only observer of one episode that checks the A2 invariants of ADR-033 (P1-22).
+
+    - S_0: every predator is at distance >= d_safe from every prey (``check_initial``);
+    - every step: living + captured + starved prey = n_prey; living + starved predators =
+      n_predators; 0 < e <= E_max for every living agent; no capture in the first step (step 0).
+
+    It only reads the state passed to it: it never writes arrays, never receives or uses a
+    random generator and never changes the course of the episode. A violation raises
+    ``InvariantViolationError``; nothing is corrected or hidden.
+    """
+
+    def __init__(self, params: WorldParams) -> None:
+        self._params = params
+        self.initial_checked = False
+        self.steps_checked = 0
+
+    def check_initial(self, world: WorldState) -> None:
+        if world.step != 0:
+            raise ValueError(f"S_0 must be at step 0, got step {world.step}")
+        distances = pairwise_distances(
+            world.predators.positions, world.prey.positions, self._params.size
+        )
+        d_safe = self._params.safe_distance
+        if distances.size and float(distances.min()) < d_safe:
+            predator, prey = np.unravel_index(int(np.argmin(distances)), distances.shape)
+            raise InvariantViolationError(
+                SAFE_DISTANCE,
+                None,
+                f"predator {predator} starts at {float(distances.min()):.6g} from prey {prey}, "
+                f"below d_safe = {d_safe}",
+            )
+        self.initial_checked = True
+
+    def __call__(self, trace: StepTrace) -> None:
+        if trace.step != self.steps_checked:
+            raise RuntimeError(
+                f"the A2 checker expected step {self.steps_checked} and received {trace.step}"
+            )
+        world, params = trace.world, self._params
+        self._check_identity(
+            PREY_IDENTITY,
+            world.prey,
+            params.n_prey,
+            (DeathCause.CAPTURED, DeathCause.STARVATION),
+            trace.step,
+        )
+        self._check_identity(
+            PREDATOR_IDENTITY,
+            world.predators,
+            params.n_predators,
+            (DeathCause.STARVATION,),
+            trace.step,
+        )
+        self._check_energy(PREY_ENERGY, world.prey, params.prey, trace.step)
+        self._check_energy(PREDATOR_ENERGY, world.predators, params.predator, trace.step)
+        if trace.step == 0 and trace.captures.consumers.size:
+            raise InvariantViolationError(
+                FIRST_STEP_CAPTURE,
+                trace.step,
+                f"{trace.captures.consumers.size} capture(s) in the first step",
+            )
+        self.steps_checked += 1
+
+    @staticmethod
+    def _check_identity(
+        invariant: str,
+        species: SpeciesState,
+        expected: int,
+        causes: tuple[DeathCause, ...],
+        step: int,
+    ) -> None:
+        alive = int(np.count_nonzero(species.alive))
+        dead = {
+            cause.name.lower(): int(np.count_nonzero(species.death_cause == cause))
+            for cause in causes
+        }
+        if alive + sum(dead.values()) != expected:
+            raise InvariantViolationError(invariant, step, f"alive {alive} + {dead} != {expected}")
+
+    @staticmethod
+    def _check_energy(
+        invariant: str, species: SpeciesState, params: SpeciesParams, step: int
+    ) -> None:
+        living = np.flatnonzero(species.alive)
+        energy = species.energy[living]
+        valid = (energy > 0.0) & (energy <= params.e_max)
+        if not bool(np.all(valid)):
+            first = int(np.flatnonzero(~valid)[0])
+            raise InvariantViolationError(
+                invariant,
+                step,
+                f"living agent {int(living[first])} has energy {float(energy[first])!r}, "
+                f"outside (0, {params.e_max}]",
+            )
+
+
+# ---------------------------------------------------------------- block execution
+
+CONFIRMATION_BLOCKS = ("confirmation", "second_confirmation")
+ConfigResolver = Callable[[str, tuple[str, ...]], ResolvedConfig]
+PolicyFactory = Callable[[str, str, ResolvedConfig], Policy]
+
+
+@dataclass(frozen=True)
+class EpisodeTask:
+    """One episode of a block: scenario, condition, seed coordinates and overrides."""
+
+    block: str
+    scenario: str
+    condition: Condition
+    seed_group: int
+    item: int
+    overrides: tuple[str, ...]
+
+    @property
+    def identity(self) -> EpisodeIdentity:
+        """P1-13: purpose PILOT, run 0, generation 0."""
+        return EpisodeIdentity(Purpose.PILOT, self.seed_group, run=0, generation=0, item=self.item)
+
+    @property
+    def label(self) -> str:
+        return (
+            f"{self.block}/{self.scenario}/{self.condition.name}/"
+            f"seed_group {self.seed_group}/item {self.item}"
+        )
+
+
+def plan_block(
+    spec: P1Spec,
+    block: str,
+    values: CandidateValues,
+    scenarios: Sequence[str] = SCENARIOS,
+    conditions: Sequence[str] | None = None,
+) -> tuple[EpisodeTask, ...]:
+    """Episodes of ``block`` for the candidate ``values``, in a fixed order.
+
+    Order: scenario (A, B, C) -> condition (catalogue order) -> item. ``scenarios`` and
+    ``conditions`` select subsets (stages run some scenarios; rule-tuning rounds run only
+    ``rules``); every selected condition must exist in every selected scenario.
+    """
+    blocks = spec.blocks.named()
+    if block not in blocks:
+        raise ValueError(f"unknown block {block!r}; expected one of {tuple(blocks)}")
+    for scenario in scenarios:
+        _scenario(scenario)
+    if not scenarios or len(set(scenarios)) != len(scenarios):
+        raise ValueError("scenarios must be a non-empty selection without repetitions")
+    selected = [s for s in SCENARIOS if s in scenarios]
+    if conditions is not None and (not conditions or len(set(conditions)) != len(conditions)):
+        raise ValueError("conditions must be a non-empty selection without repetitions")
+
+    block_spec = blocks[block]
+    tasks: list[EpisodeTask] = []
+    for scenario in selected:
+        catalogue = CONDITIONS_BY_SCENARIO[scenario]
+        if conditions is not None:
+            for name in conditions:
+                condition(scenario, name)  # rejects names missing from this scenario
+        chosen = [c for c in catalogue if conditions is None or c.name in conditions]
+        group = block_spec.seed_groups.for_scenario(scenario)
+        for chosen_condition in chosen:
+            overrides = condition_overrides(values, scenario, chosen_condition.name)
+            tasks.extend(
+                EpisodeTask(block, scenario, chosen_condition, group, item, overrides)
+                for item in range(block_spec.episodes)
+            )
+    return tuple(tasks)
+
+
+class A2ViolationError(RuntimeError):
+    """An A2 invariant failed: the block stops and the author is consulted (P1-22)."""
+
+    def __init__(self, task: EpisodeTask, violation: InvariantViolationError) -> None:
+        super().__init__(f"{task.label}: {violation}")
+        self.task = task
+        self.violation = violation
+
+
+@dataclass(frozen=True)
+class EpisodeOutcome:
+    """Everything one executed episode provides to the P1 command (T3)."""
+
+    task: EpisodeTask
+    config_hash: str
+    key_columns: dict[str, int]
+    result: EpisodeResult
+    steps_checked: int
+
+
+def iter_block(
+    tasks: Sequence[EpisodeTask],
+    resolve: ConfigResolver,
+    make_policy: PolicyFactory,
+    *,
+    confirmation_authorized: bool = False,
+) -> Iterator[EpisodeOutcome]:
+    """Run the episodes of ``tasks`` in order, each watched by an A2 checker.
+
+    ``resolve(scenario, overrides)`` and ``make_policy(name, species, config)`` are supplied by
+    the composition root (configuration loader and reference policies). Episodes of a
+    confirmation block run only with ``confirmation_authorized=True`` (P1-21, D16).
+
+    The iteration stops at the first error. An A2 violation becomes ``A2ViolationError``; any
+    other error keeps its type and gets a note naming the episode. Nothing is skipped.
+    """
+    tasks = tuple(tasks)
+    blocked = sorted({t.block for t in tasks if t.block in CONFIRMATION_BLOCKS})
+    if blocked and not confirmation_authorized:
+        raise PermissionError(
+            f"block(s) {blocked} need the author's explicit authorization (P1-21, D16)"
+        )
+    return _execute(tasks, resolve, make_policy)
+
+
+def _execute(
+    tasks: tuple[EpisodeTask, ...], resolve: ConfigResolver, make_policy: PolicyFactory
+) -> Iterator[EpisodeOutcome]:
+    configs: dict[tuple[str, tuple[str, ...]], ResolvedConfig] = {}
+    registry: SeedRegistry | None = None
+    for task in tasks:
+        try:
+            key = (task.scenario, task.overrides)
+            if key not in configs:
+                configs[key] = resolve(task.scenario, task.overrides)
+            config = configs[key]
+            if config.scenario != task.scenario:
+                raise ValueError(f"resolved scenario {config.scenario!r} != {task.scenario!r}")
+            if registry is None:
+                registry = SeedRegistry(config.project_seed)
+            elif config.project_seed != registry.project_seed:
+                raise ValueError("all episodes of a block must share the project seed")
+            outcome = _run_task(task, config, registry, make_policy)
+        except InvariantViolationError as violation:
+            raise A2ViolationError(task, violation) from violation
+        except Exception as error:
+            error.add_note(f"P1 episode: {task.label}")
+            raise
+        yield outcome
+
+
+def _run_task(
+    task: EpisodeTask,
+    config: ResolvedConfig,
+    registry: SeedRegistry,
+    make_policy: PolicyFactory,
+) -> EpisodeOutcome:
+    params = config.world
+    identity = task.identity
+    checker = InvariantChecker(params)
+    # S_0 is not passed to on_step: rebuild it from fresh generators of the same identity (V7).
+    checker.check_initial(initial_world(params, registry, identity))
+    prey_policy = make_policy(task.condition.prey_policy, "prey", config)
+    predator_policy = make_policy(task.condition.predator_policy, "predator", config)
+    result = run_episode(params, prey_policy, predator_policy, registry, identity, on_step=checker)
+    if checker.steps_checked != result.record.steps:
+        raise RuntimeError(
+            f"the A2 checker observed {checker.steps_checked} of {result.record.steps} steps"
+        )
+    return EpisodeOutcome(
+        task=task,
+        config_hash=config.config_hash,
+        key_columns=episode_key_columns(task.seed_group, task.item),
+        result=result,
+        steps_checked=checker.steps_checked,
     )
