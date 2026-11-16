@@ -1,6 +1,7 @@
 # Diccionario de datos de P1
 
-Archivos que escribe `neuroeco pilot p1` (F4, tareas T3, T3b y T3c) en
+Archivos que escriben `neuroeco pilot p1` (F4, tareas T3, T3b y T3c) y
+`neuroeco pilot p1-criteria` (T4) en
 `results/pilots/p1/<bloque>/<iteration_NNN | entry | evaluation>/`. Las decisiones de origen
 están en [ADR-033](decisions/ADR-033-p1-operational-definitions.md) (P1-13, P1-16, P1-19, P1-20 y
 P1-22) y el formato en [ADR-023](decisions/ADR-023-csv-results.md). La definición de las columnas
@@ -263,6 +264,68 @@ bloque cuando su `provenance.json` tiene `status` = `completed`, `a2_violation` 
 `result_files`. Cualquier violación queda en un `failure.json` con `a2_violation` distinto de
 `null` y en la procedencia fallida con `a2_violation` = `true`.
 
+## Criterios de un bloque: `neuroeco pilot p1-criteria` (T4, D1)
+
+`neuroeco pilot p1-criteria --result <directorio>` evalúa un bloque publicado con
+`neuroeco.analysis.calibration` y escribe, dentro del mismo directorio, `criteria.csv` y
+`criteria_provenance.json`. El flujo de cada bloque es: `pilot p1` → `pilot p1-criteria` → un
+único commit con los resultados, los criterios y su procedencia (P1-19).
+
+**Comprobaciones (si alguna falla, no se escribe nada y el código de salida es 1):**
+
+1. Las mismas comprobaciones de git que `pilot p1`: sin marcas assume-unchanged o
+   skip-worktree, sin filtros `clean`/`process` ni `refs/replace/`, todo archivo versionado
+   igual a HEAD, el paquete `neuroeco` dentro del repositorio, rama remota bajo
+   `refs/remotes/` con URL y HEAD sincronizado con ella, y los archivos de criterios no
+   ignorados. La única diferencia: se admiten sin versionar **solo** los archivos del bloque
+   evaluado (`provenance.json`, `episodes.csv`, `bootstrap_keys.csv` y los dos de criterios),
+   para que resultados y criterios entren en un mismo commit; cualquier otro archivo sin
+   versionar se rechaza, porque el código de evaluación debe ser el publicado.
+2. El bloque: `status` = `completed`, `a2_violation` = `false`, SHA-256 de los dos CSV iguales
+   a `result_files`, cada episodio planificado exactamente una vez, claves de P1-13 y P1-20,
+   valores candidatos y configuraciones iguales a la procedencia, y recuentos coherentes
+   (D14). Un bloque fallido, parcial, alterado o con una violación A2 nunca se evalúa (P1-22).
+3. Sin sobrescritura: si ya existen los dos archivos, la ejecución solo se acepta cuando el
+   nuevo `criteria.csv` es idéntico byte a byte al existente y la procedencia existente
+   corresponde a él y a los mismos archivos de entrada; entonces no se reescribe nada. Si
+   difieren, o solo existe uno de los dos, se rechaza.
+
+### `criteria.csv`: una fila por criterio o parte de criterio
+
+Mismo formato común que los demás CSV. Orden de las filas: A1, A2, B7; los criterios de cada
+escenario ejecutado (A, B, C); los de A (A4 a, b1, b2 y C4); los de B frente a A (A4 c, B4); los
+de C frente a A (A4 d, B5); y A6. Con los mismos archivos de entrada y el mismo `uv.lock`, el
+archivo es idéntico en cada ejecución.
+
+| Columna | Significado |
+|---|---|
+| `criterion` | `A1` … `A6`, `B1` … `B7`, `C1` … `C4` (P1-16) |
+| `class` | `A`, `B` o `C` |
+| `part` | Parte del criterio: `a`, `b1`, `b2`, `c`, `d` (A4); `prey` o `predator` (B2); `i` o `ii` (B4); la sonda (C1); `starvation_share` o `few_captures` (C4); vacío en los demás |
+| `scenario` | `A`, `B` o `C`; `B-A` o `C-A` para una comparación entre escenarios; vacío para A1, A2 y B7 |
+| `status` | `pass` o `fail` (clases A y B); `alert`, `no_alert` o `not_applicable` (clase C, con denominador nulo en C2 o C4) |
+| `value` | Cantidades exactas calculadas (fracciones como `7/20`) |
+| `rule` | Condición aplicada, con la referencia a P1-16 o a la decisión correspondiente |
+| `bca_estimate`, `bca_lower`, `bca_upper` | Intervalo BCa de A6 (decide el criterio) y de B2 (solo descriptivo, P1-7); vacíos en los demás y los límites vacíos si no es estimable |
+| `bca_estimable` | `true` o `false` (vacío sin intervalo) |
+| `bca_confidence`, `bca_resamples` | 0.95 y 9999 (ADR-032) |
+
+Reglas aplicadas: aritmética exacta con fracciones (D14); C4 cuenta solo muertes de presas
+(D2); el BCa de B2 usa la supervivencia de la presa y la fracción capturada (D3); en A6, un BCa
+no estimable con δ = −1 es el intervalo degenerado {−1} y se cumple (D1), y cualquier otro BCa
+no estimable no se cumple. El generador de cada intervalo se reconstruye de su fila de
+`bootstrap_keys.csv` exactamente como `SeedRegistry.generator`.
+
+### `criteria_provenance.json`
+
+`schema` (`neuroeco.p1-criteria-provenance/1`), `timestamp_utc`, `command`,
+`result_directory` (relativo al repositorio), `block` (bloque, etapa e iteración),
+`input_files` (SHA-256 de `provenance.json`, `episodes.csv` y `bootstrap_keys.csv`), `git`
+(`head`, `upstream`, `upstream_commit` y `remote_url` sin credenciales), `python`, `platform`,
+`dependencies` (numpy, scipy y pandas), `criteria_rows`, `criteria_sha256` y
+`stage_requirements` (etapa y si se cumplen S_A, S_B, S_C o toda la clase A según la etapa,
+P1-18).
+
 ## Historial del esquema
 
 - **T3 (`b53f547`):** primera versión de `neuroeco.p1-provenance/1` y `neuroeco.p1-failure/1`.
@@ -278,6 +341,7 @@ bloque cuando su `provenance.json` tiene `status` = `completed`, `a2_violation` 
   `remote_url`; en `failure.json`, `git.remote_url`. Son aditivos y se mantienen los
   identificadores `/1`. Un resultado anterior a T3c (sin `config_files` ni `result_files`) no
   sirve como prerrequisito; no existe ninguno real.
+- **T4:** primera versión de `criteria.csv` y `neuroeco.p1-criteria-provenance/1`.
 - **Política (Mn-8):** cualquier cambio futuro incompatible (quitar o renombrar un campo, o
   cambiar su tipo o su significado) incrementará la versión del esquema (`/2`). Los lectores
   (T4) deben validar los campos que usan y no solo el identificador.

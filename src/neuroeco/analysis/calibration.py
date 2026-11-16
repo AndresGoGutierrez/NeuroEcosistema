@@ -973,6 +973,57 @@ def evaluate_block(block: Block) -> tuple[CriterionResult, ...]:
     return tuple(results)
 
 
+# ---------------------------------------------------------------- criteria.csv (T4-I3, D1)
+
+CRITERIA_COLUMNS = (
+    "criterion",
+    "class",
+    "part",
+    "scenario",
+    "status",
+    "value",
+    "rule",
+    "bca_estimate",
+    "bca_lower",
+    "bca_upper",
+    "bca_estimable",
+    "bca_confidence",
+    "bca_resamples",
+)
+
+
+def _number(value: float | int | None) -> str:
+    return "" if value is None else repr(value)
+
+
+def criteria_rows(results: Sequence[CriterionResult]) -> list[dict[str, str]]:
+    """One ``criteria.csv`` row per result, in the order of ``evaluate_block``, as text.
+
+    Floats use ``repr`` (exact round trip); an absent interval leaves the ``bca_`` cells empty.
+    """
+    rows = []
+    for result in results:
+        bca = result.interval
+        rows.append(
+            {
+                "criterion": result.criterion,
+                "class": result.criterion_class,
+                "part": result.part,
+                "scenario": result.scenario,
+                "status": str(result.status),
+                "value": result.value,
+                "rule": result.rule,
+                "bca_estimate": _number(bca.estimate) if bca else "",
+                "bca_lower": _number(bca.lower) if bca else "",
+                "bca_upper": _number(bca.upper) if bca else "",
+                "bca_estimable": ("true" if bca.estimable else "false") if bca else "",
+                "bca_confidence": _number(bca.confidence) if bca else "",
+                "bca_resamples": _number(bca.resamples) if bca else "",
+            }
+        )
+    return rows
+
+
 # ---------------------------------------------------------------- stage requirements (P1-18)
 
 _COMMON_REQUIREMENTS = (("A1", "", ""), ("A2", "", ""))
