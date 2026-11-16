@@ -15,7 +15,7 @@ from typer.testing import CliRunner
 
 from neuroeco.analysis.calibration import grid_selection, read_episodes, render_selection
 from neuroeco.application import calibration as app
-from neuroeco.presentation import pilot_p1, pilot_p1_criteria
+from neuroeco.presentation import pilot_p1, pilot_p1_criteria, pilot_p1_sequence
 from neuroeco.presentation.cli import app as cli
 from p1_support import (
     PASSING_GIT_CHECKS,
@@ -268,6 +268,28 @@ def test_a_round_without_changes_has_no_a_rev(tmp_path, monkeypatch) -> None:
         assert round_phase(configs, output, path, phase).exit_code == 0
     result = round_phase(configs, output, path, "reevaluation")
     assert result.exit_code == 1 and "changed no value" in result.output
+
+
+def test_the_verifier_reads_the_result_of_a_round(anchored, monkeypatch) -> None:
+    """C3: the round's outcome comes from its published, verified phases (D-T4c-2)."""
+    configs, output, path = anchored
+    favour(monkeypatch, "round_prey", **PREY_WINNER)
+    registry = pilot_p1.load_registry(configs / "pilots" / "p1.yaml")
+    spec = pilot_p1.load_p1_spec(configs / "pilots" / "p1.yaml", {})
+    round_spec = registry.rounds[0][1]
+    assert round_phase(configs, output, path, "prey").exit_code == 0
+    assert pilot_p1_sequence.round_result(registry, round_spec, output, spec) is None
+    assert round_phase(configs, output, path, "predator").exit_code == 0
+    pending = pilot_p1_sequence.round_result(registry, round_spec, output, spec)
+    assert pending.changed and not pending.complete  # A_rev still to run
+    assert round_phase(configs, output, path, "reevaluation").exit_code == 0
+    reevaluation = output / "calibration" / "round_01" / "reevaluation"
+    assert criteria(monkeypatch, reevaluation).exit_code == 0
+    result = pilot_p1_sequence.round_result(registry, round_spec, output, spec)
+    assert (
+        result.complete and result.values == read_json(reevaluation / "provenance.json")["values"]
+    )
+    assert isinstance(result.reevaluation.requirements_met, bool)
 
 
 def test_the_criteria_command_refuses_a_grid(anchored, monkeypatch) -> None:

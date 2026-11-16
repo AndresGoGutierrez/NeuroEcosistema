@@ -34,20 +34,27 @@ from neuroeco.analysis.sequence import (
     ITERATION,
     ROUND,
     Outcome,
+    RoundResult,
     SequenceReport,
     Step,
     Verdict,
     verify_sequence,
 )
+from neuroeco.application.calibration import GRID_PHASES, P1Spec, RoundSpec
+from neuroeco.infrastructure.config_loader import load_p1_spec
 from neuroeco.infrastructure.provenance import file_sha256
 from neuroeco.presentation.pilot_p1 import (
     CALIBRATION_BLOCK,
     DEFAULT_OUTPUT_ROOT,
     DEFAULT_SPEC,
     ENTRY_LEAF,
+    PHASE_MODES,
     P1RefusalError,
     Registry,
     load_registry,
+    phase_directory,
+    published_winner,
+    verify_result,
 )
 from neuroeco.presentation.pilot_p1_criteria import (
     CRITERIA_FILE,
@@ -110,7 +117,52 @@ def _check_provenance(directory: Path, expected: dict[str, Any]) -> None:
             )
 
 
-def build_steps(registry: Registry, output_root: Path) -> list[Step]:
+def round_result(
+    registry: Registry, round_spec: RoundSpec, output_root: Path, p1_spec: P1Spec
+) -> RoundResult | None:
+    """Result of a round from its published phases (T4c); None until both grids exist.
+
+    Each grid is verified as ``pilot p1`` verifies a prerequisite (completed, intact, the
+    planned rows, the registered round) and its winner is recomputed from its rows (D-T4c-2).
+    When a value changed, the A_rev outcome comes from its block and matching criteria.
+    """
+    number = round_spec.round_number
+    grids = [phase_directory(output_root, number, phase) for phase in GRID_PHASES]
+    if not all(directory.exists() for directory in grids):
+        return None
+    winners: dict[str, float] = {}
+    for phase, directory in zip(GRID_PHASES, grids, strict=True):
+        values = dataclasses.replace(round_spec.values, **winners)
+        data, _ = verify_result(
+            directory,
+            {
+                "mode": PHASE_MODES[phase],
+                "round": number,
+                "values": dataclasses.asdict(values),
+                "values_source.sha256": registry.round_sha256(number),
+            },
+            p1_spec,
+        )
+        winners.update(published_winner(directory, data, p1_spec, phase))
+    final = dataclasses.replace(round_spec.values, **winners)
+    changed = bool(final.differing(round_spec.values))
+    reevaluation = None
+    directory = phase_directory(output_root, number, "reevaluation")
+    if changed and directory.exists():
+        _check_provenance(
+            directory,
+            {
+                "mode": PHASE_MODES["reevaluation"],
+                "round": number,
+                "values": dataclasses.asdict(final),
+                "values_source.sha256": registry.round_sha256(number),
+            },
+        )
+        reevaluation = block_outcome(directory, "A_rev")
+    return RoundResult(changed, dataclasses.asdict(final), reevaluation)
+
+
+def build_steps(registry: Registry, output_root: Path, p1_spec: P1Spec) -> list[Step]:
     """Registered iterations, each followed by its rounds, then the entry if it was published."""
     calibration = output_root / CALIBRATION_BLOCK
     rounds = sorted(registry.rounds, key=lambda item: item[1].round_number)
@@ -132,10 +184,23 @@ def build_steps(registry: Registry, output_root: Path) -> list[Step]:
             )
             outcome = block_outcome(directory, spec.stage)
         steps.append(
-            Step(ITERATION, spec.iteration, spec.stage, spec.changed_parameter, outcome=outcome)
+            Step(
+                ITERATION,
+                spec.iteration,
+                spec.stage,
+                spec.changed_parameter,
+                outcome=outcome,
+                values=dataclasses.asdict(spec.values),
+            )
         )
         steps.extend(
-            Step(ROUND, r.round_number, after_iteration=r.after_iteration)
+            Step(
+                ROUND,
+                r.round_number,
+                after_iteration=r.after_iteration,
+                values=dataclasses.asdict(r.values),
+                round_result=round_result(registry, r, output_root, p1_spec),
+            )
             for _, r in rounds
             if r.after_iteration == spec.iteration
         )
@@ -172,7 +237,7 @@ def pilot_p1_sequence(
 ) -> None:
     """Verify the P1 calibration sequence against the published results (P1-18)."""
     try:
-        steps = build_steps(load_registry(spec), output_root)
+        steps = build_steps(load_registry(spec), output_root, load_p1_spec(spec, {}))
     except (SequenceError, CriteriaError, P1RefusalError, ValueError) as error:
         typer.echo(f"refused: {error}", err=True)
         raise typer.Exit(code=EXIT_NOT_ALLOWED) from error
