@@ -1085,6 +1085,57 @@ def select_predator(
     return _select(PREDATOR_GRID_PARAMETERS, totals, (current,))
 
 
+# ---------------------------------------------------------------- grids of a round (T4c)
+
+SELECTION_SCHEMA = "neuroeco.p1-selection/1"
+GRID_STAGES: Mapping[str, str] = {"prey": "round_prey", "predator": "round_predator"}
+
+
+def read_episodes(path: Path) -> tuple[Row, ...]:
+    """``episodes.csv`` with explicit types (ADR-023): the reading that every criterion uses."""
+    return _read_csv(path, EPISODE_COLUMN_TYPES)
+
+
+def grid_selection(
+    rows: Sequence[Row],
+    phase: str,
+    flee_grid: Sequence[float],
+    cruise_grid: Sequence[float],
+    current: Mapping[str, float],
+) -> GridSelection:
+    """The winner of the ``phase`` grid of a round from its rows (P1-17, D4).
+
+    ``current`` holds the values in force at the start of the grid (tie rule 1).
+    """
+    if phase == "prey":
+        return select_prey(
+            rows,
+            flee_grid,
+            cruise_grid,
+            (current["prey_flee_threshold"], current["prey_cruise_fraction"]),
+        )
+    if phase == "predator":
+        return select_predator(rows, cruise_grid, current["predator_cruise_fraction"])
+    raise CriteriaError(f"grid phase must be one of {tuple(GRID_STAGES)}, got {phase!r}")
+
+
+def render_selection(selection: GridSelection, phase: str) -> bytes:
+    """``selection.json`` as deterministic bytes: winner, tie rule and every total (P1-4)."""
+    document = {
+        "schema": SELECTION_SCHEMA,
+        "phase": phase,
+        "parameters": list(selection.parameters),
+        "winner": dict(zip(selection.parameters, selection.winner, strict=True)),
+        "objective": selection.objective,
+        "rule": selection.rule,
+        "tied": [list(c) for c in selection.tied],
+        "totals": [
+            {"combination": list(c), "total": total} for c, total in selection.totals.items()
+        ],
+    }
+    return (json.dumps(document, indent=2, sort_keys=True) + "\n").encode("utf-8")
+
+
 # ---------------------------------------------------------------- criteria.csv (T4-I3, D1)
 
 CRITERIA_COLUMNS = (

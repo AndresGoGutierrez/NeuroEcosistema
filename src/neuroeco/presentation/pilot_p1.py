@@ -8,6 +8,12 @@ Modes (exactly one per invocation, T3-1):
   block with the final values (P1-18, state E); ``run`` = 0.
 - ``--confirmation`` / ``--second-confirmation`` with ``--values-from`` and
   ``--author-authorized``: the 35 conditions of the confirmation block (P1-21); ``run`` = 0.
+- ``--round rounds/RR.yaml --phase prey|predator|reevaluation`` (T4c, D-T4c-3): one phase of a
+  registered rule-tuning round (P1-17), with the same protections. ``prey`` and ``predator``
+  run their grid (only ``rules`` in A, calibration seeds) and publish ``selection.json``; the
+  predator grid takes the prey winner from the published prey grid, recomputed. In the prey
+  grid the combination in force must reproduce the rows of the previous evaluation of A
+  (D-T4c-4). ``reevaluation`` is A_rev with the winners (D-T4c-2).
 
 Before any episode the command validates, in this order:
 
@@ -34,7 +40,7 @@ There is no option to bypass these checks.
 Results are assembled in ``<destination>.partial-<id>`` and published in one rename when the
 block is complete (T3-3). Any error after the destination is known leaves a separate
 ``<destination>.failed-<UTC>-<id>`` directory with ``failure.json`` (and ``provenance.json`` when
-it was captured) and no CSV file (T3-4). Rule-tuning rounds are not run here (task T4c).
+it was captured) and no CSV file (T3-4).
 """
 
 from __future__ import annotations
@@ -56,6 +62,12 @@ from typing import Annotated, Any
 import typer
 
 import neuroeco
+from neuroeco.analysis.calibration import (
+    CriteriaError,
+    grid_selection,
+    read_episodes,
+    render_selection,
+)
 from neuroeco.application.calibration import (
     BOOTSTRAP_COLUMNS,
     CONFIRMATION_BLOCKS,
@@ -64,7 +76,11 @@ from neuroeco.application.calibration import (
     ENTRY_EVALUATION_RUN,
     ENTRY_STAGE,
     EPISODE_COLUMNS,
+    GRID_PHASES,
     REAL_SEED_GROUPS,
+    REEVALUATION_STAGE,
+    ROUND_PREDATOR_STAGE,
+    ROUND_PREY_STAGE,
     SCENARIOS,
     A2ViolationError,
     CandidateValues,
@@ -76,9 +92,11 @@ from neuroeco.application.calibration import (
     check_approved_seed_groups,
     check_block_plan,
     check_calibration_sequence,
+    check_grid_plan,
     episode_row,
     iter_block,
     plan_block,
+    plan_grid,
     scenario_overrides,
     stage_scenarios,
 )
@@ -135,6 +153,32 @@ EPISODES_FILE = "episodes.csv"
 BOOTSTRAP_FILE = "bootstrap_keys.csv"
 PROVENANCE_FILE = "provenance.json"
 FAILURE_FILE = "failure.json"
+SELECTION_FILE = "selection.json"  # T4c: winner of a grid of a round
+
+# T4c (D-T4c-3, D-T4c-6): the phases of a rule-tuning round.
+ROUND_PHASES = ("prey", "predator", "reevaluation")
+PHASE_MODES = {"prey": "round_prey", "predator": "round_predator", "reevaluation": "reevaluation"}
+PHASE_STAGES = {
+    "prey": ROUND_PREY_STAGE,
+    "predator": ROUND_PREDATOR_STAGE,
+    "reevaluation": REEVALUATION_STAGE,
+}
+PHASE_LEAVES = {"prey": "prey_grid", "predator": "predator_grid", "reevaluation": "reevaluation"}
+ROUND_MODES = tuple(PHASE_MODES.values())
+VALUES_FROM_MODES = ("entry", "confirmation", "second_confirmation")
+
+
+def result_names(stage: str) -> tuple[str, ...]:
+    """Files published by a block of ``stage`` besides its provenance (T4c, D-T4c-1)."""
+    if stage in (ROUND_PREY_STAGE, ROUND_PREDATOR_STAGE):
+        return (EPISODES_FILE, SELECTION_FILE)
+    if stage == REEVALUATION_STAGE:
+        return (EPISODES_FILE,)  # no bootstrap key is defined for A_rev (D-T4c-1)
+    return (EPISODES_FILE, BOOTSTRAP_FILE)
+
+
+def phase_directory(output_root: Path, round_number: int, phase: str) -> Path:
+    return output_root / CALIBRATION_BLOCK / f"round_{round_number:02d}" / PHASE_LEAVES[phase]
 
 
 class P1RefusalError(ValueError):
@@ -145,16 +189,18 @@ class P1RefusalError(ValueError):
 class Mode:
     """What one invocation runs and where its results go."""
 
-    name: str  # iteration | entry | confirmation | second_confirmation
+    name: str  # iteration | entry | confirmation | second_confirmation | round_* | reevaluation
     block: str
     stage: str
-    iteration: int  # 0 when the mode is not an iteration
+    iteration: int  # 0 when the mode is not an iteration; the anchor iteration of a round
     run: int  # bootstrap ``run`` field (P1-20)
     scenarios: tuple[str, ...]
-    values: CandidateValues
-    source: Path  # the iteration specification that provides the values
-    values_iteration: int  # number of that iteration
+    values: CandidateValues  # for a round: the values in force when the round starts
+    source: Path  # the iteration (or round) specification that provides the values
+    values_iteration: int  # number of that iteration (for a round, its anchor iteration)
     leaf: str
+    round_number: int = 0  # T4c: the round of a round mode
+    phase: str = ""  # T4c: prey | predator | reevaluation
 
     def destination(self, output_root: Path) -> Path:
         return output_root / self.block / self.leaf
@@ -174,6 +220,13 @@ class Registry:
                 return file_sha256(path)
         raise P1RefusalError(f"iteration {number} is not registered (P1-19)")
 
+    def round_sha256(self, number: int) -> str:
+        """SHA-256 of the registered specification of round ``number`` (T4c)."""
+        for path, spec in self.rounds:
+            if spec.round_number == number:
+                return file_sha256(path)
+        raise P1RefusalError(f"round {number} is not registered (P1-19)")
+
 
 def select_mode(
     *,
@@ -183,6 +236,8 @@ def select_mode(
     second_confirmation: bool,
     values_from: Path | None,
     author_authorized: bool,
+    round_spec: Path | None = None,
+    phase: str | None = None,
 ) -> Mode:
     """Exactly one mode; the values always come from a pre-registered iteration file."""
     chosen = [
@@ -192,19 +247,43 @@ def select_mode(
             ("entry", entry_evaluation),
             ("confirmation", confirmation),
             ("second_confirmation", second_confirmation),
+            ("round", round_spec is not None),
         )
         if selected
     ]
     if len(chosen) != 1:
         raise P1RefusalError(
-            "choose exactly one of --iteration, --entry-evaluation, --confirmation and "
-            "--second-confirmation"
+            "choose exactly one of --iteration, --entry-evaluation, --confirmation, "
+            "--second-confirmation and --round"
         )
     name = chosen[0]
     # A missing authorization is checked in the pre-flight, once the destination is known, so
     # that the refused attempt is recorded; a superfluous one is a usage error.
     if author_authorized and name not in CONFIRMATION_BLOCKS:
         raise P1RefusalError("--author-authorized only applies to confirmation blocks")
+    if (phase is not None) != (name == "round"):
+        raise P1RefusalError("--phase goes with --round, and --round needs --phase")
+    if name == "round":
+        if phase not in ROUND_PHASES or values_from is not None:
+            raise P1RefusalError(
+                f"--round needs --phase one of {ROUND_PHASES} and no --values-from"
+            )
+        assert round_spec is not None
+        spec = load_round_spec(round_spec)
+        return Mode(
+            name=PHASE_MODES[phase],
+            block=CALIBRATION_BLOCK,
+            stage=PHASE_STAGES[phase],
+            iteration=spec.after_iteration,
+            run=0,  # no bootstrap key in a round (P1-17, D-T4c-1)
+            scenarios=("A",),
+            values=spec.values,
+            source=round_spec,
+            values_iteration=spec.after_iteration,
+            leaf=f"round_{spec.round_number:02d}/{PHASE_LEAVES[phase]}",
+            round_number=spec.round_number,
+            phase=phase,
+        )
     if name == "iteration":
         if values_from is not None:
             raise P1RefusalError("--values-from is not used with --iteration")
@@ -279,6 +358,13 @@ def _registered(path: Path, registry: Registry) -> IterationSpec:
     raise P1RefusalError(f"{path} is not a registered iteration specification (P1-19)")
 
 
+def _registered_round(path: Path, registry: Registry) -> RoundSpec:
+    for registered, spec in registry.rounds:
+        if registered.resolve() == path.resolve():
+            return spec
+    raise P1RefusalError(f"{path} is not a registered round specification (P1-19)")
+
+
 # ---------------------------------------------------------------- earlier attempts (M-6, D18)
 
 
@@ -347,9 +433,9 @@ def check_no_recalibration(mode: Mode, output_root: Path) -> None:
 
     T3c (decision Mn-7 of the author): recalibrating, or repeating the entry evaluation, after
     the confirmation started is not allowed while no methodological flow is approved. There is
-    no option to bypass this check.
+    no option to bypass this check. The phases of a round are calibration too (T4c).
     """
-    if mode.name != "iteration":
+    if mode.name not in ("iteration", *ROUND_MODES):
         return
     started = []
     entry = output_root / CALIBRATION_BLOCK / ENTRY_LEAF
@@ -428,7 +514,11 @@ def _expected_identities(spec: P1Spec, data: Mapping[str, Any]) -> list[tuple[st
     """Row identities of a published block, rebuilt from its provenance and the P1 spec."""
     try:
         values = CandidateValues(**data["values"])
-        tasks = plan_block(spec, data["block"], values, scenarios=tuple(data["scenarios"]))
+        grid = {PHASE_STAGES[p]: p for p in GRID_PHASES}.get(data.get("stage"))
+        if grid is not None:  # T4c: a grid of a round
+            tasks = tuple(task for task, _ in plan_grid(spec, values, grid))
+        else:
+            tasks = plan_block(spec, data["block"], values, scenarios=tuple(data["scenarios"]))
     except (KeyError, TypeError, ValueError) as error:
         raise P1RefusalError(f"the provenance cannot rebuild its plan: {error}") from error
     stage, iteration = str(data.get("stage")), str(data.get("iteration"))
@@ -464,9 +554,10 @@ def verify_result(
     planned, written = data.get("episodes_planned"), data.get("episodes_written")
     if type(planned) is not int or planned < 1 or written != planned:
         raise P1RefusalError(f"{label}: {written!r} of {planned!r} planned episodes written")
-    episodes, keys = directory / EPISODES_FILE, directory / BOOTSTRAP_FILE
+    episodes = directory / EPISODES_FILE
+    published = [directory / name for name in result_names(str(data.get("stage")))]
     recorded = data.get("result_files")
-    for path in (episodes, keys):
+    for path in published:
         if not path.is_file():
             raise P1RefusalError(f"{label}: {path.name} is missing")
         if not isinstance(recorded, dict) or recorded.get(path.name) != file_sha256(path):
@@ -481,7 +572,37 @@ def verify_result(
     identities = [tuple(row[name] for name in ROW_IDENTITY) for row in rows]
     if identities != _expected_identities(spec, data):
         raise P1RefusalError(f"{label}: the rows of {EPISODES_FILE} are not the planned episodes")
-    return data, [provenance_path, episodes, keys]
+    return data, [provenance_path, *published]
+
+
+def published_winner(
+    directory: Path, data: Mapping[str, Any], spec: P1Spec, phase: str
+) -> dict[str, float]:
+    """Winner of a published grid, recomputed from its rows (T4c, D-T4c-2).
+
+    The selection is computed again with the P1-17 functions from ``episodes.csv`` and the
+    values in force recorded in the provenance; ``selection.json`` must be exactly that.
+    """
+    label = directory.as_posix()
+    try:
+        rows = read_episodes(directory / EPISODES_FILE)
+        selection = grid_selection(
+            rows,
+            phase,
+            spec.grids.prey_flee_threshold,
+            spec.grids.cruise_fraction,
+            data["values"],
+        )
+    except (CriteriaError, KeyError, TypeError) as error:
+        raise P1RefusalError(f"{label}: the winner cannot be recomputed ({error})") from error
+    if render_selection(selection, phase) != (directory / SELECTION_FILE).read_bytes():
+        raise P1RefusalError(
+            f"{label}: {SELECTION_FILE} is not the selection recomputed from its episodes (P1-17)"
+        )
+    return dict(zip(selection.parameters, selection.winner, strict=True))
+
+
+PHASES_BEFORE = {"prey": (), "predator": ("prey",), "reevaluation": ("prey", "predator")}
 
 
 def check_prerequisites(
@@ -490,12 +611,16 @@ def check_prerequisites(
     output_root: Path,
     spec: P1Spec,
     config_files: Mapping[str, str],
-) -> tuple[list[dict[str, Any]], list[Path]]:
+) -> tuple[list[dict[str, Any]], list[Path], dict[str, float]]:
     """The completed results that must precede this mode, with their specification hashes.
 
     Every prerequisite must have been produced with exactly the same configuration files
     (``config_files``: SHA-256 of p1.yaml, p0.yaml, base.yaml, scenarios.yaml and
     baselines.yaml), so no parameter outside the candidate can change along the chain (IA-3).
+
+    A phase of round R (T4c) needs the iterations up to its anchor, every phase of the earlier
+    rounds (A_rev only when the round changed a value) and the earlier phases of R. The
+    winners of R so far are returned, recomputed from the published grids.
     """
     records: list[dict[str, Any]] = []
     files: list[Path] = []
@@ -552,7 +677,86 @@ def check_prerequisites(
             raise P1RefusalError(
                 f"the specification of iteration {used} changed after the first confirmation"
             )
-    return records, files
+    winners: dict[str, float] = {}
+    if mode.round_number:
+        for _, round_spec in sorted(registry.rounds, key=lambda item: item[1].round_number):
+            number = round_spec.round_number
+            if number > mode.round_number:
+                break
+            phases = PHASES_BEFORE[mode.phase] if number == mode.round_number else ROUND_PHASES
+            winners = {}
+            for phase in phases:
+                values = dataclasses.replace(round_spec.values, **winners)
+                if phase == "reevaluation" and not values.differing(round_spec.values):
+                    continue  # a round that changed nothing has no A_rev (P1-18)
+                directory = phase_directory(output_root, number, phase)
+                data = need(
+                    directory,
+                    {
+                        "mode": PHASE_MODES[phase],
+                        "block": CALIBRATION_BLOCK,
+                        "round": number,
+                        "values": dataclasses.asdict(values),
+                        "values_source.sha256": registry.round_sha256(number),
+                    },
+                )
+                if phase in GRID_PHASES:
+                    winners.update(published_winner(directory, data, spec, phase))
+    return records, files, winners
+
+
+def previous_a_evaluation(mode: Mode, registry: Registry, output_root: Path) -> Path:
+    """The evaluation of A that a round starts from (D-T4c-4): its anchor iteration, or the
+    A_rev of the previous round on the same anchor."""
+    earlier = [
+        spec.round_number
+        for _, spec in registry.rounds
+        if spec.round_number < mode.round_number and spec.after_iteration == mode.iteration
+    ]
+    if earlier:
+        return phase_directory(output_root, max(earlier), "reevaluation")
+    return output_root / CALIBRATION_BLOCK / f"iteration_{mode.iteration:03d}"
+
+
+COMPARED_OUT = ("block", "stage", "iteration")  # identify the block, not the episode
+
+
+def check_reproduces_previous(
+    rows: Sequence[Mapping[str, Any]], values: CandidateValues, previous: Path
+) -> None:
+    """D-T4c-4: the combination in force reproduces the rules episodes of A of ``previous``.
+
+    Same seeds and same configuration give the same episodes (ADR-016, DET-5); any difference
+    stops the round, because the grid would not compare like with like.
+    """
+    current = {
+        str(row["item"]): row
+        for row in rows
+        if float(row["prey_flee_threshold"]) == values.prey_flee_threshold
+        and float(row["prey_cruise_fraction"]) == values.prey_cruise_fraction
+    }
+    _, previous_rows = _csv_rows(previous / EPISODES_FILE)
+    reference = {
+        row["item"]: row
+        for row in previous_rows
+        if row["scenario"] == "A" and row["condition"] == "rules"
+    }
+    if not current or current.keys() != reference.keys():
+        raise ValueError(
+            f"D-T4c-4: the combination in force does not have the episodes of "
+            f"{previous.as_posix()}; the round stops"
+        )
+    for item, row in sorted(current.items()):
+        different = [
+            name
+            for name in EPISODE_COLUMNS
+            if name not in COMPARED_OUT and str(row[name]) != reference[item][name]
+        ]
+        if different:
+            raise ValueError(
+                f"D-T4c-4: item {item} of the combination in force differs from "
+                f"{previous.as_posix()} in {different}; the round stops"
+            )
 
 
 # ---------------------------------------------------------------- pre-flight
@@ -571,6 +775,11 @@ class Preflight:
     inputs: list[Path]
     config_files: dict[str, str]  # SHA-256 of the five configuration files (IA-3)
     real_groups: bool  # the specification declares real P1 seed groups (10-32)
+    # T4c: the values the block runs with (a round's winners applied), per task, and the
+    # evaluation of A the prey grid must reproduce (D-T4c-4); None outside the prey grid.
+    values: CandidateValues | None = None
+    task_values: dict[Any, CandidateValues] | None = None
+    previous_evaluation: Path | None = None
 
 
 def preflight(
@@ -600,8 +809,11 @@ def preflight(
     config_files = {name: file_sha256(path) for name, path in config_paths.items()}
 
     registry = load_registry(spec_path)
-    current = _registered(mode.source, registry)
-    if mode.name != "iteration":
+    if mode.round_number:
+        current: IterationSpec | RoundSpec = _registered_round(mode.source, registry)
+    else:
+        current = _registered(mode.source, registry)
+    if mode.name in VALUES_FROM_MODES:
         last_path, last = registry.iterations[-1]
         if last_path.resolve() != mode.source.resolve() or last.stage != "C":
             raise P1RefusalError(
@@ -618,13 +830,18 @@ def preflight(
 
     check_no_recalibration(mode, output_root)
     attempts = check_attempts(mode, destination, output_root)
-    prerequisites, result_files = check_prerequisites(
+    prerequisites, result_files, winners = check_prerequisites(
         mode, registry, output_root, spec, config_files
     )
+    # A round's phases run with the winners published so far (D-T4c-2); otherwise no change.
+    values = dataclasses.replace(mode.values, **winners)
+    if mode.phase == "reevaluation" and not values.differing(mode.values):
+        raise P1RefusalError(
+            f"round {mode.round_number} changed no value: there is no A_rev, the next step is "
+            "T_fin (P1-18)"
+        )
 
-    candidate = {
-        s: load_config(config_dir, s, scenario_overrides(mode.values, s)) for s in SCENARIOS
-    }
+    candidate = {s: load_config(config_dir, s, scenario_overrides(values, s)) for s in SCENARIOS}
     state_k = admissibility({s: config.world for s, config in candidate.items()})
     if not state_k.a1:
         failed = [f"{s}:{c.constraint_id}" for s, c in state_k.checks if not c.satisfied]
@@ -633,8 +850,16 @@ def preflight(
             "the candidate is rejected without running episodes (P1-18)"
         )
 
-    tasks = plan_block(spec, mode.block, mode.values, scenarios=mode.scenarios)
-    check_block_plan(tasks, spec, mode.block, mode.values, mode.scenarios)
+    if mode.phase in GRID_PHASES:
+        planned = plan_grid(spec, values, mode.phase)
+        check_grid_plan(planned, spec, values, mode.phase)
+        tasks = tuple(task for task, _ in planned)
+        task_values = dict(planned)
+    else:
+        tasks = plan_block(spec, mode.block, values, scenarios=mode.scenarios)
+        check_block_plan(tasks, spec, mode.block, values, mode.scenarios)
+        task_values = dict.fromkeys(tasks, values)
+    previous = previous_a_evaluation(mode, registry, output_root) if mode.phase == "prey" else None
     configs = {}
     for task in tasks:
         key = (task.scenario, task.overrides)
@@ -669,6 +894,9 @@ def preflight(
         inputs,
         config_files,
         real_groups,
+        values,
+        task_values,
+        previous,
     )
 
 
@@ -685,7 +913,10 @@ def destination_files(destination: Path) -> list[Path]:
     failed = destination.with_name(f"{destination.name}.failed-00000000T000000Z-00000000")
     partial = destination.with_name(f"{destination.name}.partial-00000000")
     return [
-        *(destination / name for name in (EPISODES_FILE, BOOTSTRAP_FILE, PROVENANCE_FILE)),
+        *(
+            destination / name
+            for name in (EPISODES_FILE, BOOTSTRAP_FILE, SELECTION_FILE, PROVENANCE_FILE)
+        ),
         *(directory / name for directory in (failed, partial) for name in (FAILURE_FILE,)),
         failed / PROVENANCE_FILE,
     ]
@@ -852,7 +1083,13 @@ def mode_summary(mode: Mode) -> dict[str, Any]:
         "values_iteration": mode.values_iteration,
         "values_source": {"path": mode.source.as_posix(), "sha256": _sha_or_none(mode.source)},
         "values": dataclasses.asdict(mode.values),
+        **_round_fields(mode),
     }
+
+
+def _round_fields(mode: Mode) -> dict[str, Any]:
+    """T4c: the round and phase of a round mode (additive fields, absent otherwise)."""
+    return {"round": mode.round_number, "phase": mode.phase} if mode.round_number else {}
 
 
 def provenance_document(
@@ -878,7 +1115,9 @@ def provenance_document(
         "episodes_planned": len(plan.tasks),
         "author_authorized": author_authorized,
         "project_seed": str(plan.project_seed),
-        "values": dataclasses.asdict(mode.values),
+        **_round_fields(mode),
+        # the values the block ran with (for a round phase, the winners so far applied)
+        "values": dataclasses.asdict(plan.values or mode.values),
         "values_source": {"path": mode.source.as_posix(), "sha256": file_sha256(mode.source)},
         "p1_spec": {"path": spec_path.as_posix(), "sha256": file_sha256(spec_path)},
         "registered_iterations": [
@@ -1067,8 +1306,15 @@ def pilot_p1(
     output_root: Annotated[Path, typer.Option(help="Root of the P1 results.")] = (
         DEFAULT_OUTPUT_ROOT
     ),
+    round_spec: Annotated[
+        Path | None, typer.Option("--round", help="Registered round file RR.yaml (T4c).")
+    ] = None,
+    round_phase: Annotated[
+        str | None,
+        typer.Option("--phase", help="Phase of the round: prey, predator or reevaluation."),
+    ] = None,
 ) -> None:
-    """Pilot P1: run one calibration iteration, the entry evaluation or a confirmation."""
+    """Pilot P1: run one calibration iteration, a round phase, the entry or a confirmation."""
     try:
         mode = select_mode(
             iteration=iteration,
@@ -1077,6 +1323,8 @@ def pilot_p1(
             second_confirmation=second_confirmation,
             values_from=values_from,
             author_authorized=author_authorized,
+            round_spec=round_spec,
+            phase=round_phase,
         )
     except (ValueError, OSError) as error:  # the destination is unknown: nothing to record
         typer.echo(f"error: {error}", err=True)
@@ -1117,19 +1365,32 @@ def pilot_p1(
                         world,
                         stage=mode.stage,
                         iteration=mode.iteration,
-                        values=mode.values,
+                        values=(plan.task_values or {}).get(outcome.task, mode.values),
                     )
                 )
                 completed += 1
 
         phase = "writing"
         block_spec = plan.spec.blocks.named()[mode.block]
+        names = result_names(mode.stage)
         write_csv(partial / EPISODES_FILE, EPISODE_COLUMNS, rows)
-        write_csv(
-            partial / BOOTSTRAP_FILE,
-            BOOTSTRAP_COLUMNS,
-            bootstrap_rows(block_spec, mode.run, mode.scenarios, plan.project_seed),
-        )
+        if BOOTSTRAP_FILE in names:
+            write_csv(
+                partial / BOOTSTRAP_FILE,
+                BOOTSTRAP_COLUMNS,
+                bootstrap_rows(block_spec, mode.run, mode.scenarios, plan.project_seed),
+            )
+        if SELECTION_FILE in names:  # T4c: a grid of a round
+            if plan.previous_evaluation is not None:
+                check_reproduces_previous(rows, mode.values, plan.previous_evaluation)
+            selection = grid_selection(
+                read_episodes(partial / EPISODES_FILE),
+                mode.phase,
+                plan.spec.grids.prey_flee_threshold,
+                plan.spec.grids.cruise_fraction,
+                dataclasses.asdict(plan.values or mode.values),
+            )
+            (partial / SELECTION_FILE).write_bytes(render_selection(selection, mode.phase))
         provenance = {
             **provenance,
             "status": "completed",
@@ -1137,9 +1398,7 @@ def pilot_p1(
             "duration_seconds": round(time.perf_counter() - started, 3),
             "episodes_written": len(rows),
             "episodes_discarded": 0,
-            "result_files": {
-                name: file_sha256(partial / name) for name in (EPISODES_FILE, BOOTSTRAP_FILE)
-            },
+            "result_files": {name: file_sha256(partial / name) for name in names},
             "a2_violation": False,
         }
         replace_json(partial / PROVENANCE_FILE, provenance)

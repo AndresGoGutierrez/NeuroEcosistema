@@ -939,7 +939,12 @@ def _run_task(
 STAGE_SCENARIOS: Mapping[str, tuple[str, ...]] = {"A": ("A",), "B": ("A", "B"), "C": ("A", "C")}
 ENTRY_STAGE = "entry"
 CONFIRMATION_STAGE = "confirmation"
-ROW_STAGES = (*STAGES, ENTRY_STAGE, CONFIRMATION_STAGE)
+# T4c (D-T4c-6): the rows of a rule-tuning round and of its re-evaluation (additive labels).
+ROUND_PREY_STAGE = "round_prey"
+ROUND_PREDATOR_STAGE = "round_predator"
+REEVALUATION_STAGE = "A_rev"
+ROUND_STAGES = (ROUND_PREY_STAGE, ROUND_PREDATOR_STAGE, REEVALUATION_STAGE)
+ROW_STAGES = (*STAGES, ENTRY_STAGE, CONFIRMATION_STAGE, *ROUND_STAGES)
 
 
 def stage_scenarios(stage: str) -> tuple[str, ...]:
@@ -1193,6 +1198,96 @@ def check_block_plan(
         if got != wanted:
             raise ValueError(f"task {index} of the plan is {got}, expected {wanted}")
     raise ValueError(f"the plan has {len(actual)} tasks, expected {len(expected)}")
+
+
+# ---------------------------------------------------------------- rule-tuning rounds (T4c)
+
+CALIBRATION_BLOCK = "calibration"
+GRID_PHASES = ("prey", "predator")
+GRID_PARAMETERS: Mapping[str, tuple[str, ...]] = {
+    "prey": ("prey_flee_threshold", "prey_cruise_fraction"),
+    "predator": ("predator_cruise_fraction",),
+}
+
+
+def grid_combinations(grids: Grids, phase: str) -> tuple[dict[str, float], ...]:
+    """The combinations of one grid of a round (P1-4, P1-17), in a fixed order.
+
+    Prey: ``p_flee`` x ``u_cruise`` of the prey (p_flee outer); predator: ``u_cruise`` of the
+    predator.
+    """
+    if phase == "prey":
+        return tuple(
+            {"prey_flee_threshold": p, "prey_cruise_fraction": u}
+            for p in grids.prey_flee_threshold
+            for u in grids.cruise_fraction
+        )
+    if phase == "predator":
+        return tuple({"predator_cruise_fraction": u} for u in grids.cruise_fraction)
+    raise ValueError(f"grid phase must be one of {GRID_PHASES}, got {phase!r}")
+
+
+def plan_grid(
+    spec: P1Spec, values: CandidateValues, phase: str
+) -> tuple[tuple[EpisodeTask, CandidateValues], ...]:
+    """Episodes of one grid of a round, each with the values of its combination (P1-17).
+
+    Only the ``rules`` condition of scenario A, with the calibration seeds: every combination
+    uses the same episode keys (P1-13), so the combinations are paired. ``values`` are the
+    values in force; each combination replaces only its grid parameters.
+    """
+    planned: list[tuple[EpisodeTask, CandidateValues]] = []
+    for combination in grid_combinations(spec.grids, phase):
+        combination_values = dataclasses.replace(values, **combination)
+        tasks = plan_block(
+            spec, CALIBRATION_BLOCK, combination_values, scenarios=("A",), conditions=("rules",)
+        )
+        planned.extend((task, combination_values) for task in tasks)
+    return tuple(planned)
+
+
+def check_grid_plan(
+    planned: Sequence[tuple[EpisodeTask, CandidateValues]],
+    spec: P1Spec,
+    values: CandidateValues,
+    phase: str,
+) -> None:
+    """The grid plan is exactly the expected one, built independently of ``plan_grid``.
+
+    The combinations are paired (P1-13: the same episodes in every combination), so the seed
+    groups and items are checked for each combination separately.
+    """
+    by_combination: dict[CandidateValues, list[EpisodeTask]] = {}
+    for task, combination_values in planned:
+        by_combination.setdefault(combination_values, []).append(task)
+    for tasks in by_combination.values():
+        check_block_groups(tasks, spec, CALIBRATION_BLOCK)
+    block_spec = spec.blocks.calibration
+    expected = []
+    for combination in grid_combinations(spec.grids, phase):
+        combination_values = dataclasses.replace(values, **combination)
+        expected.extend(
+            (
+                CALIBRATION_BLOCK,
+                "A",
+                "rules",
+                block_spec.seed_groups.a,
+                item,
+                condition_overrides(combination_values, "A", "rules"),
+                combination_values,
+            )
+            for item in range(block_spec.episodes)
+        )
+    actual = [
+        (t.block, t.scenario, t.condition.name, t.seed_group, t.item, t.overrides, v)
+        for t, v in planned
+    ]
+    if actual == expected:
+        return
+    for index, (got, wanted) in enumerate(zip(actual, expected, strict=False)):
+        if got != wanted:
+            raise ValueError(f"task {index} of the grid plan is {got}, expected {wanted}")
+    raise ValueError(f"the grid plan has {len(actual)} tasks, expected {len(expected)}")
 
 
 def bootstrap_rows(

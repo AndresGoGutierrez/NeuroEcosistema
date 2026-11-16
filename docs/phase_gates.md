@@ -355,6 +355,25 @@ desempate de P1-17 a partir de los CSV (lo que implementa T4), la rejilla del de
 ganador y la reevaluación A_rev. Va después de T4 porque necesita la selección sobre resultados;
 T3 no ejecuta rondas.
 
+Decisiones del autor para T4c (aprobadas antes de implementar; incrementos C1 rejillas, C2
+A_rev, C3 verificador e integración):
+
+| ID | Decisión del autor |
+|---|---|
+| D-T4c-1 | A_rev no tiene `bootstrap_keys.csv`: P1-20 no define una clave para A_rev. B2 conserva su veredicto (suma pareada, P1-7) y su BCa descriptivo figura como no calculado. ADR-033 no cambia |
+| D-T4c-2 | Sin `rounds/RR_rev.yaml`: los valores de A_rev se derivan automáticamente de los ganadores publicados de las dos rejillas (la anterioridad la dan `RR.yaml` y el commit de las rejillas) |
+| D-T4c-3 | Las rondas son un modo aditivo de `pilot p1` (`--round RR --phase prey\|predator\|reevaluation`) que reutiliza todas las protecciones de T3–T3c |
+| D-T4c-4 | En la rejilla de la presa se vuelve a ejecutar la combinación vigente y sus filas deben coincidir con las de `rules` en A de la evaluación anterior; cualquier discrepancia detiene la ronda |
+| D-T4c-5 | El verificador de T4b se integra en las comprobaciones previas de `pilot p1` en C3: ninguna ejecución empieza si la secuencia no lo permite |
+| D-T4c-6 | Se mantiene el esquema `/1` con los valores nuevos de `stage` `round_prey`, `round_predator` y `A_rev` (cambio aditivo, Mn-8), comprobando la compatibilidad con los consumidores existentes |
+
+**Modificación expresamente autorizada de una prueba de una fase cerrada (T4c, alternativa (a)
+del autor):** `tests/architecture/test_pilot_p1_imports.py` (T3) prohibía que `pilot_p1.py`
+importara `neuroeco.analysis`. D-T4c-5 (verificar la secuencia antes de ejecutar) y D-T4c-2 (la
+selección de P1-17 en las rondas) necesitan esa dependencia, así que la prueba solo conserva la
+prohibición de pygame. El comando sigue sin calcular criterios mientras se ejecutan los
+episodios. Ninguna otra prueba ni contrato de arquitectura cambia.
+
 **T4 (evaluación de los criterios desde los CSV; detalle en
 [p1_data_dictionary.md](p1_data_dictionary.md)).** `analysis/calibration.py` (P1-10) lee un
 bloque publicado, verifica su integridad (SHA-256 de `result_files`, bloque completo sin
