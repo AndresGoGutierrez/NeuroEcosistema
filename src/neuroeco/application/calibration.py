@@ -1136,6 +1136,19 @@ APPROVED_BLOCKS: Mapping[str, tuple[int, tuple[int, int, int]]] = {
     "second_confirmation": (50, (30, 31, 32)),
 }
 REAL_SEED_GROUPS = range(10, 33)  # 10-32: only the approved table may declare them (D16)
+SYNTHETIC_SEED_GROUPS_FROM = 1000  # D16: test specifications use seed groups >= 1000
+
+
+def sequence_gate_required(spec: P1Spec) -> bool:
+    """Whether ``pilot p1`` must verify the P1-18 sequence before running (T4c, D-T4c-5).
+
+    Only a specification whose every seed group is synthetic (>= 1000, D16) is exempt; any
+    other group, the real ones of P1-13 (10-32) included, requires the verification. Every
+    episode of every block takes its seed group from these declarations (``check_block_groups``),
+    so no specification can run a non-synthetic seed without the verification.
+    """
+    groups = spec.declared_seed_groups().values()
+    return not all(group >= SYNTHETIC_SEED_GROUPS_FROM for group in groups)
 
 
 def check_approved_seed_groups(spec: P1Spec) -> None:

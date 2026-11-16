@@ -297,8 +297,11 @@ local, más que los ≈ 80 s estimados en ADR-032; no cambia ningún parámetro 
   Windows). T4 (evaluación de criterios, comando `pilot p1-criteria` y selección de P1-17)
   completada y validada en las comprobaciones automáticas (CI `43807682418` de `85c42af`,
   correcto en Ubuntu y Windows, 802 pruebas), pendiente de la revisión del autor. T4b
-  (verificador de la secuencia, D-T4b-1 a D-T4b-4) completada, pendiente de la revisión del
-  autor. T4c, T5 y la ejecución de episodios de P1 no están autorizadas.
+  (verificador de la secuencia, D-T4b-1 a D-T4b-4) completada (CI `43810435648` de `42bce95`,
+  correcto), pendiente de la revisión del autor. T4c (rondas de ajuste de las reglas, A_rev e
+  integración del verificador en `pilot p1`, D-T4c-1 a D-T4c-6) autorizada e implementada en
+  los incrementos C1–C3, pendiente de su CI y de la revisión del autor. T5 y la ejecución de
+  episodios reales de P1 no están autorizadas.
 - **Criterio de cierre (ADR-024):** criterios de ADR-020 (clase A completa en la confirmación;
   cada B cumplido o aceptado mediante ADR; cada C investigado y documentado), `p_flee` y
   `u_cruise` ajustados y congelados (ADR-012) y etiqueta `env-frozen-v1`.
@@ -349,7 +352,7 @@ especificación y cargador de P1 · T2 comprobador A2 y ejecución por bloques �
 T3b** · T4 evaluación de criterios desde CSV · **T4b verificador de la secuencia de calibración** · **T4c ejecución de las rondas de la rejilla** · T5… iteraciones de calibración ·
 confirmación (con autorización expresa) · congelamiento (P1-2, ADR de valores, etiqueta) · cierre.
 
-**T4c (pendiente, decisión T3-2 del autor):** ejecución de las rondas de ajuste de las reglas
+**T4c (decisión T3-2 del autor; implementada en C1–C3):** ejecución de las rondas de ajuste de las reglas
 (P1-17): la rejilla de la presa, la selección de su ganador con los objetivos y el orden de
 desempate de P1-17 a partir de los CSV (lo que implementa T4), la rejilla del depredador con ese
 ganador y la reevaluación A_rev. Va después de T4 porque necesita la selección sobre resultados;
@@ -373,6 +376,37 @@ importara `neuroeco.analysis`. D-T4c-5 (verificar la secuencia antes de ejecutar
 selección de P1-17 en las rondas) necesitan esa dependencia, así que la prueba solo conserva la
 prohibición de pygame. El comando sigue sin calcular criterios mientras se ejecutan los
 episodios. Ninguna otra prueba ni contrato de arquitectura cambia.
+
+**Alcance de la puerta de D-T4c-5 (decisión del autor en C3, alternativa (a)).** Integrar el
+verificador siempre activo habría invalidado 22 pruebas aprobadas de T3–T3c
+(`test_pilot_p1_command.py` y `test_pilot_p1_protections.py`), que ejecutan cadenas sintéticas
+sin criterios y con transiciones que P1-18 prohíbe (A → B sin ronda) para probar las
+protecciones. El autor decidió:
+
+- La puerta es **obligatoria** en toda especificación con algún grupo de semillas menor que
+  1000, incluidos los reales de P1-13 (10–32); solo están exentas las especificaciones
+  sintéticas de las pruebas, con todos sus grupos ≥ 1000 (D16), que conservan el comportamiento
+  de T3–T3c. Las 22 pruebas no cambian.
+- No existe ninguna opción para saltarla; cada episodio toma su grupo de la especificación y el
+  plan se comprueba de forma independiente, así que no se puede eludir cambiando la
+  especificación.
+
+Implementación (C3):
+
+- `pilot p1` construye los pasos como `pilot p1-sequence` y exige que el bloque sea el paso
+  pendiente con una transición `allowed`. La puerta va después de la secuencia estática y antes
+  de las demás comprobaciones de resultados. Un rechazo queda en la fase `preflight`, con
+  `P1RefusalError` y `failure.json`, sin episodios. La verificación se registra en el campo
+  aditivo `sequence_gate` de la procedencia, y los archivos leídos entran en `input_files`.
+- La confirmación exige la secuencia completa con la entrada publicada y la clase A cumplida
+  (`author_authorization_required`), además de `--author-authorized`. La segunda confirmación
+  se rechaza siempre, porque P1-18 no tiene ese estado sin un flujo de recalibración aprobado
+  (Mn-7, que ya la declaraba inalcanzable).
+- `pilot p1` acepta `--d9-confirmed N`: la misma confirmación de la vía E5 de D9 que D-T4b-4 ya
+  aprobó para `pilot p1-sequence`. Sin ella la vía E5 sería inalcanzable en un experimento
+  real. Solo afecta a esa regla y no omite ninguna otra comprobación.
+- D-T4b-1 queda cumplida: el verificador está integrado antes de T5. D-T4b-2 queda superada: lo
+  que sigue a una ronda ya se verifica y el veredicto "no verificable" desapareció.
 
 **T4 (evaluación de los criterios desde los CSV; detalle en
 [p1_data_dictionary.md](p1_data_dictionary.md)).** `analysis/calibration.py` (P1-10) lee un
@@ -553,7 +587,11 @@ Los resultados se usan solo si pertenecen a su especificación registrada (SHA-2
 | T4-I3 comando `pilot p1-criteria` | `1b7f786` | Publicado con I4 (`43807682418` ✅) |
 | T4-I4 selección de P1-17 y registro de T4 | `85c42af` | `43807682418` ✅ (802 pruebas en Ubuntu y en Windows) |
 | T4 cierre documental | `64a4454` | `43808611612` ✅ |
-| T4b verificador de la secuencia | commit que añade esta fila | CI de su publicación (resultado en el informe al autor) |
+| T4b verificador de la secuencia | `42bce95` | `43810435648` ✅ |
+| T4c-C1 rejillas de una ronda | `0a0bc02` | Publicado con C2 (`43815758642` ✅) |
+| T4c-C2 A_rev | `1446161` | `43815758642` ✅ (847 pruebas en Ubuntu y en Windows) |
+| T4c-C3 transiciones tras una ronda (parte 1) | `4f991ca` | Publicado con la parte 2 |
+| T4c-C3 puerta de la secuencia en `pilot p1` (parte 2) | commit que añade esta fila | CI de su publicación (resultado en el informe al autor) |
 
 **Incidencias durante F4:**
 

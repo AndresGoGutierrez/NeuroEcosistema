@@ -19,7 +19,10 @@ Before any episode the command validates, in this order:
 
 1. the P1 specification, and the approved seed groups and sizes if it declares real groups;
 2. every registered iteration and round specification (strict file names) and their static
-   sequence;
+   sequence; then, unless every seed group of the specification is synthetic (>= 1000, D16),
+   the sequence of P1-18 after the published results and their criteria (T4c, D-T4c-5): the
+   block runs only if it is exactly the step that the sequence allows (the verification of
+   ``pilot p1-sequence``; with the real seed groups it can never be skipped);
 3. no new iteration once the entry evaluation exists or a confirmation started (Mn-6);
    earlier attempts at the same destination (D18); and the completed results this mode needs
    (iteration N needs 1..N-1; the entry evaluation the whole chain; the confirmation the entry
@@ -98,6 +101,7 @@ from neuroeco.application.calibration import (
     plan_block,
     plan_grid,
     scenario_overrides,
+    sequence_gate_required,
     stage_scenarios,
 )
 from neuroeco.application.configs import ResolvedConfig
@@ -780,6 +784,34 @@ class Preflight:
     values: CandidateValues | None = None
     task_values: dict[Any, CandidateValues] | None = None
     previous_evaluation: Path | None = None
+    # T4c (D-T4c-5): the verification of the P1-18 sequence, or why it did not apply.
+    sequence_gate: dict[str, Any] | None = None
+
+
+SYNTHETIC_GATE_RECORD = {
+    "applied": False,
+    "reason": "every seed group is synthetic (>= 1000, D16): test specification",
+}
+
+
+def sequence_gate(
+    mode: Mode,
+    spec: P1Spec,
+    registry: Registry,
+    output_root: Path,
+    d9_confirmed: Sequence[int],
+) -> tuple[dict[str, Any], list[Path]]:
+    """D-T4c-5: the P1-18 sequence allows this block, unless the specification is synthetic.
+
+    There is no option to skip it: only the seed groups of the specification decide, and any
+    group below 1000 (the real ones included) requires it.
+    """
+    if not sequence_gate_required(spec):
+        return dict(SYNTHETIC_GATE_RECORD), []
+    # Imported here: pilot_p1_sequence builds on this module (verify_result, Registry, ...).
+    from neuroeco.presentation.pilot_p1_sequence import check_sequence_gate
+
+    return check_sequence_gate(mode, registry, output_root, spec, d9_confirmed)
 
 
 def preflight(
@@ -789,8 +821,12 @@ def preflight(
     author_authorized: bool,
     destination: Path,
     output_root: Path,
+    d9_confirmed: Sequence[int] = (),
 ) -> Preflight:
-    """Validations that need no result value, in the order approved by the author (T3-T3c)."""
+    """Validations that need no result value, in the order approved by the author (T3-T3c).
+
+    T4c adds the verification of the P1-18 sequence (D-T4c-5) after the static sequence.
+    """
     p0_path = config_dir / "pilots" / "p0.yaml"
     p0 = load_p0_spec(p0_path)
     spec = load_p1_spec(spec_path, {"exploratory": EXPLORATORY_SEED_GROUP, "P0": p0.seed_group})
@@ -827,6 +863,7 @@ def preflight(
         spec.grids,
         reference.world.n_predators,
     )
+    gate_record, gate_files = sequence_gate(mode, spec, registry, output_root, d9_confirmed)
 
     check_no_recalibration(mode, output_root)
     attempts = check_attempts(mode, destination, output_root)
@@ -881,6 +918,7 @@ def preflight(
         *(path for path, _ in registry.iterations),
         *(path for path, _ in registry.rounds),
         *result_files,
+        *gate_files,
     ]
     return Preflight(
         spec,
@@ -897,6 +935,7 @@ def preflight(
         values,
         task_values,
         previous,
+        gate_record,
     )
 
 
@@ -1132,6 +1171,7 @@ def provenance_document(
         ],
         "prerequisites": plan.prerequisites,
         "previous_attempts": plan.attempts,
+        "sequence_gate": plan.sequence_gate,  # T4c, D-T4c-5 (additive, Mn-8)
         "git_checks": None,
         "uv_lock_sha256": file_sha256(uv_lock) if uv_lock.exists() else None,
         "dependencies": dependency_versions(DEPENDENCIES),
@@ -1313,6 +1353,15 @@ def pilot_p1(
         str | None,
         typer.Option("--phase", help="Phase of the round: prey, predator or reevaluation."),
     ] = None,
+    d9_confirmed: Annotated[
+        list[int] | None,
+        typer.Option(
+            "--d9-confirmed",
+            help="Stage-A iteration whose n_plants change the author confirmed through the E5 "
+            "route of D9 (D-T4b-4, documented in its motive); repeatable. It is the same "
+            "confirmation as in pilot p1-sequence and does not skip any verification.",
+        ),
+    ] = None,
 ) -> None:
     """Pilot P1: run one calibration iteration, a round phase, the entry or a confirmation."""
     try:
@@ -1333,7 +1382,15 @@ def pilot_p1(
     destination = mode.destination(output_root)
     phase, partial, provenance, completed = "preflight", None, None, 0
     try:
-        plan = preflight(mode, spec_path, config_dir, author_authorized, destination, output_root)
+        plan = preflight(
+            mode,
+            spec_path,
+            config_dir,
+            author_authorized,
+            destination,
+            output_root,
+            d9_confirmed or (),
+        )
         # Provenance is captured BEFORE anything is written (P1-19): git_dirty describes the
         # code that runs, not the files this command is about to create.
         first_hash = next(iter(plan.configs.values())).config_hash  # every hash is listed too

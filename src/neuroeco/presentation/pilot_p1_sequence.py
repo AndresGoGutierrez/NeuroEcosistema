@@ -1,7 +1,9 @@
-"""``neuroeco pilot p1-sequence``: verify the P1 calibration sequence (F4 T4b, D-T4b-1).
+"""``neuroeco pilot p1-sequence``: verify the P1 calibration sequence (F4 T4b, D-T4b-1; T4c).
 
-Read-only and independent of ``pilot p1`` (author decision D-T4b-1): it is run before the author
-authorizes each iteration; before T5 it must be integrated into the pre-flight of ``pilot p1``.
+Read-only. The author runs it before authorizing each iteration (D-T4b-1), and since T4c
+(D-T4c-5) ``pilot p1`` applies the same verification in its pre-flight through
+``check_sequence_gate``: unless every seed group of the specification is synthetic (>= 1000,
+D16), no block runs if the sequence does not allow exactly that step.
 
 For every registered iteration with a published result it checks that the result belongs to
 that registered specification (mode, stage, values and SHA-256 of the specification file) and
@@ -14,6 +16,7 @@ from __future__ import annotations
 
 import dataclasses
 import json
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -49,6 +52,8 @@ from neuroeco.presentation.pilot_p1 import (
     DEFAULT_SPEC,
     ENTRY_LEAF,
     PHASE_MODES,
+    ROUND_MODES,
+    Mode,
     P1RefusalError,
     Registry,
     load_registry,
@@ -74,6 +79,16 @@ def _json(path: Path) -> Any:
         return json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as error:
         raise SequenceError(f"{path.as_posix()} cannot be read ({error})") from None
+
+
+def evaluated_files(directory: Path, stage: str) -> list[Path]:
+    """The files of a published block that ``block_outcome`` reads (inputs of the gate)."""
+    return [
+        directory / PROVENANCE_FILE,
+        *(directory / name for name in block_files(stage)),
+        directory / CRITERIA_FILE,
+        directory / CRITERIA_PROVENANCE_FILE,
+    ]
 
 
 def block_outcome(directory: Path, stage: str) -> Outcome:
@@ -118,14 +133,20 @@ def _check_provenance(directory: Path, expected: dict[str, Any]) -> None:
 
 
 def round_result(
-    registry: Registry, round_spec: RoundSpec, output_root: Path, p1_spec: P1Spec
+    registry: Registry,
+    round_spec: RoundSpec,
+    output_root: Path,
+    p1_spec: P1Spec,
+    files: list[Path] | None = None,
 ) -> RoundResult | None:
     """Result of a round from its published phases (T4c); None until both grids exist.
 
     Each grid is verified as ``pilot p1`` verifies a prerequisite (completed, intact, the
     planned rows, the registered round) and its winner is recomputed from its rows (D-T4c-2).
     When a value changed, the A_rev outcome comes from its block and matching criteria.
+    ``files``, when given, receives every file read.
     """
+    read = files if files is not None else []
     number = round_spec.round_number
     grids = [phase_directory(output_root, number, phase) for phase in GRID_PHASES]
     if not all(directory.exists() for directory in grids):
@@ -133,7 +154,7 @@ def round_result(
     winners: dict[str, float] = {}
     for phase, directory in zip(GRID_PHASES, grids, strict=True):
         values = dataclasses.replace(round_spec.values, **winners)
-        data, _ = verify_result(
+        data, paths = verify_result(
             directory,
             {
                 "mode": PHASE_MODES[phase],
@@ -143,6 +164,7 @@ def round_result(
             },
             p1_spec,
         )
+        read.extend(paths)
         winners.update(published_winner(directory, data, p1_spec, phase))
     final = dataclasses.replace(round_spec.values, **winners)
     changed = bool(final.differing(round_spec.values))
@@ -159,11 +181,18 @@ def round_result(
             },
         )
         reevaluation = block_outcome(directory, "A_rev")
+        read.extend(evaluated_files(directory, "A_rev"))
     return RoundResult(changed, dataclasses.asdict(final), reevaluation)
 
 
-def build_steps(registry: Registry, output_root: Path, p1_spec: P1Spec) -> list[Step]:
-    """Registered iterations, each followed by its rounds, then the entry if it was published."""
+def build_steps(
+    registry: Registry, output_root: Path, p1_spec: P1Spec, files: list[Path] | None = None
+) -> list[Step]:
+    """Registered iterations, each followed by its rounds, then the entry if it was published.
+
+    ``files``, when given, receives every published file read.
+    """
+    read = files if files is not None else []
     calibration = output_root / CALIBRATION_BLOCK
     rounds = sorted(registry.rounds, key=lambda item: item[1].round_number)
     steps: list[Step] = []
@@ -183,6 +212,7 @@ def build_steps(registry: Registry, output_root: Path, p1_spec: P1Spec) -> list[
                 },
             )
             outcome = block_outcome(directory, spec.stage)
+            read.extend(evaluated_files(directory, spec.stage))
         steps.append(
             Step(
                 ITERATION,
@@ -199,7 +229,7 @@ def build_steps(registry: Registry, output_root: Path, p1_spec: P1Spec) -> list[
                 r.round_number,
                 after_iteration=r.after_iteration,
                 values=dataclasses.asdict(r.values),
-                round_result=round_result(registry, r, output_root, p1_spec),
+                round_result=round_result(registry, r, output_root, p1_spec, read),
             )
             for _, r in rounds
             if r.after_iteration == spec.iteration
@@ -209,7 +239,105 @@ def build_steps(registry: Registry, output_root: Path, p1_spec: P1Spec) -> list[
         last = steps[-1].number if steps and steps[-1].kind == ITERATION else None
         _check_provenance(entry, {"mode": "entry", "values_iteration": last})
         steps.append(Step(ENTRY, 0, outcome=block_outcome(entry, "entry")))
+        read.extend(evaluated_files(entry, "entry"))
     return steps
+
+
+# ---------------------------------------------------------------- gate of pilot p1 (D-T4c-5)
+
+CONFIRMATION, SECOND_CONFIRMATION = "confirmation", "second_confirmation"
+
+
+def gate_target(mode: Mode) -> tuple[str, int]:
+    """The step of the sequence that a ``pilot p1`` mode runs: (kind, number)."""
+    if mode.name == "iteration":
+        return ITERATION, mode.iteration
+    if mode.name in ROUND_MODES:
+        return ROUND, mode.round_number
+    if mode.name == "entry":
+        return ENTRY, 0
+    return mode.name, 0  # confirmation | second_confirmation
+
+
+def _target_label(kind: str, number: int) -> str:
+    if kind in (ITERATION, ROUND):
+        return f"{kind} {number}"
+    return "the entry evaluation" if kind == ENTRY else f"the {kind.replace('_', ' ')}"
+
+
+def gate_report(
+    steps: Sequence[Step], kind: str, number: int, d9_confirmed: Sequence[int] = ()
+) -> SequenceReport:
+    """The verification of ``steps`` if it allows exactly the step (kind, number) to run.
+
+    Raises ``P1RefusalError`` otherwise: the step must be the pending one and its transition
+    ``allowed``; a confirmation needs a complete sequence whose entry evaluation met the whole
+    class A (P1-21, D11; the authorization itself is ``--author-authorized``). P1-18 has no
+    state for a second confirmation: it needs a recalibration flow not yet approved (Mn-7).
+    """
+    reference = "(P1-18, D-T4c-5)"
+    if kind == SECOND_CONFIRMATION:
+        raise P1RefusalError(
+            "the sequence of P1-18 never reaches a second confirmation: it needs a "
+            f"recalibration flow that the author has not approved (Mn-7) {reference}"
+        )
+    steps = list(steps)
+    if kind == ENTRY and not (steps and steps[-1].kind == ENTRY):
+        steps.append(Step(ENTRY, 0))
+    report = verify_sequence(steps, d9_confirmed=d9_confirmed)
+    found = f"{report.next_step}: {report.verdict} ({report.reason})"
+    if kind == CONFIRMATION:
+        if report.verdict is Verdict.AUTHOR_AUTHORIZATION and steps and steps[-1].kind == ENTRY:
+            return report
+        raise P1RefusalError(
+            "the confirmation needs a complete sequence whose entry evaluation met the whole "
+            f"class A; the sequence gives {found} {reference}"
+        )
+    label = _target_label(kind, number)
+    if report.verdict is not Verdict.ALLOWED:
+        hint = ""
+        if report.verdict is Verdict.AUTHOR_CONFIRMATION:
+            hint = "; the E5 route of D9 needs --d9-confirmed, documented in the motive"
+        raise P1RefusalError(f"the sequence does not allow {found}{hint} {reference}")
+    pending = report.pending
+    if pending is None or (pending.kind, pending.number) != (kind, number):
+        raise P1RefusalError(
+            f"the sequence allows {report.next_step} next, not {label} ({report.reason}) "
+            f"{reference}"
+        )
+    return report
+
+
+def check_sequence_gate(
+    mode: Mode,
+    registry: Registry,
+    output_root: Path,
+    p1_spec: P1Spec,
+    d9_confirmed: Sequence[int] = (),
+) -> tuple[dict[str, Any], list[Path]]:
+    """Pre-flight of ``pilot p1`` (D-T4c-5): the record of the verification and the files read.
+
+    The sequence is built from the published results exactly as ``pilot p1-sequence`` builds it
+    (results of their registered specifications, criteria recomputed byte for byte); any result
+    that cannot be used, or a step that the sequence does not allow, refuses the block.
+    """
+    files: list[Path] = []
+    try:
+        steps = build_steps(registry, output_root, p1_spec, files)
+    except (SequenceError, CriteriaError, ValueError) as error:
+        raise P1RefusalError(f"sequence (D-T4c-5): {error}") from error
+    kind, number = gate_target(mode)
+    report = gate_report(steps, kind, number, d9_confirmed)
+    record = {
+        "applied": True,
+        "step": _target_label(kind, number),
+        "verdict": str(report.verdict),
+        "reason": report.reason,
+        "notes": list(report.notes),
+        "transitions": [f"{t.source} -> {t.target}: {t.verdict}" for t in report.transitions],
+        "d9_confirmed": sorted(set(d9_confirmed)),
+    }
+    return record, files
 
 
 def _print(report: SequenceReport) -> None:
