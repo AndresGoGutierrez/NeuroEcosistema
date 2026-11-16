@@ -289,11 +289,11 @@ local, más que los ≈ 80 s estimados en ADR-032; no cambia ningún parámetro 
 
 ## F4: P1, calibración ecológica
 
-- **Inicio:** 2026-11-15, con autorización expresa del autor limitada a T0; después, T0b, T1, T2
-  y T3, cada una autorizada por separado.
-- **Estado:** 🔄 En curso. T0, T0b, T1 y T2 aprobadas por el autor (T2 tras una auditoría, con
-  observaciones); T3 (comando `pilot p1`) completada y pendiente de revisión. T4 y la ejecución de
-  episodios de P1 no están autorizadas.
+- **Inicio:** 2026-11-15, con autorización expresa del autor limitada a T0; después, T0b, T1, T2,
+  T3 y T3b, cada una autorizada por separado.
+- **Estado:** 🔄 En curso. T0, T0b, T1, T2 y T3 aprobadas por el autor (T2 y T3 tras una
+  auditoría, con observaciones); T3b (correcciones de la auditoría de T3) completada y pendiente
+  de revisión. T4, T4b y la ejecución de episodios de P1 no están autorizadas.
 - **Criterio de cierre (ADR-024):** criterios de ADR-020 (clase A completa en la confirmación;
   cada B cumplido o aceptado mediante ADR; cada C investigado y documentado), `p_flee` y
   `u_cruise` ajustados y congelados (ADR-012) y etiqueta `env-frozen-v1`.
@@ -340,7 +340,7 @@ No se vuelve de B o C a A; agotar un presupuesto detiene F4 y obliga a consultar
 
 **Tareas previstas:** T0 documentación · T0b corrección de ADR-033 tras la auditoría · T1
 especificación y cargador de P1 · T2 comprobador A2 y ejecución por bloques · T3 comando
-`pilot p1` · T4 evaluación de criterios desde CSV · **T4b verificador de la secuencia de
+`pilot p1` · **T3b correcciones de la auditoría de T3** · T4 evaluación de criterios desde CSV · **T4b verificador de la secuencia de
 calibración** · **T4c ejecución de las rondas de la rejilla** · T5… iteraciones de calibración ·
 confirmación (con autorización expresa) · congelamiento (P1-2, ADR de valores, etiqueta) · cierre.
 
@@ -364,6 +364,57 @@ T3 no ejecuta rondas.
 | T3-7 | Diccionario de datos en `docs/p1_data_dictionary.md` |
 | T3-8 | Comando en `presentation/pilot_p1.py`; en `cli.py`, `storage.py` y `provenance.py` solo añadidos |
 | T3-9 | `--author-authorized`, más la comprobación independiente de los grupos de semillas del bloque |
+
+**T3b (correctiva, autorizada por el autor tras la auditoría de T3; detalle en
+[p1_data_dictionary.md](p1_data_dictionary.md)):**
+
+| ID | Decisión |
+|---|---|
+| I-1 | Todo lo que lee el comando (`p1.yaml`, `p0.yaml`, `base.yaml`, `scenarios.yaml`, `baselines.yaml`, especificaciones registradas y resultados exigidos) y `--output-root` deben estar dentro del repositorio y versionados, comprobado con git |
+| T3b-1 | Si la especificación declara algún grupo real (10–32), la tabla completa debe coincidir con P1-13 y con los tamaños de P1-5 (30/50/50); los grupos sintéticos ≥ 1000 quedan exentos |
+| I-2 | Orden de ejecución: iteración N exige 1 … N−1 completas; la evaluación de entrada, la cadena completa; la confirmación, la evaluación de entrada; la segunda confirmación, una primera confirmación completa con valores de una iteración anterior. Identidad de cada especificación por SHA-256. Ningún criterio se evalúa (T4b) |
+| M-1 | `HEAD` igual a su rama remota (`@{u}`), sin `git fetch` |
+| M-2 | El plan coincide exactamente (orden, condiciones, `item` y overrides) con el esperado |
+| M-4, M-5, M-6 | Procedencia de un fallo sin episodios publicados; git y modo en todo `failure.json`; intentos anteriores registrados; D18 en las confirmaciones |
+| M-7 | Pruebas de Ctrl+C e `InitializationError` a través del comando |
+| M-8, M-9 | Recuperación de directorios parciales y acreditación de A2, documentadas |
+| M-10 | Hasta 5 reintentos del renombrado ante `PermissionError`; en el registro solo `NNN.yaml` y `RR.yaml` |
+| T3b-2 | Se mantienen `neuroeco.p1-provenance/1` y `neuroeco.p1-failure/1`: cambios aditivos, sin datos reales previos |
+
+**Procedimiento ante un rechazo en el estado K (P1-18: la candidata rechazada no consume
+iteración).** El comando rechaza la candidata antes de ejecutar ningún episodio y deja
+`iteration_NNN.failed-…/failure.json` con los valores rechazados, su SHA-256 y el commit. Para
+proponer otra candidata:
+
+1. Se confirma (commit) ese registro de fallo.
+2. Se modifica el **mismo** `configs/pilots/p1/iterations/NNN.yaml` con la nueva candidata y el
+   motivo, en un commit propio, y se publica (push).
+3. Se ejecuta de nuevo `--iteration` con ese archivo. El número no cambia y el intento rechazado
+   queda en `previous_attempts` y en la historia de git.
+
+Mientras el resultado de NNN no exista, su especificación se puede reemplazar así; una vez
+publicado un resultado completo, su SHA-256 queda fijado y cualquier cambio posterior del archivo
+impide ejecutar los pasos siguientes.
+
+**Aspectos del flujo todavía no definidos (no se inventan reglas; requieren decisión del autor
+antes de usarse):**
+
+- **Recalibración antes de una segunda confirmación (P1-21).** La máquina de estados de P1-18 no
+  permite volver de B o C a A, y la validación estática rechazaría iteraciones de etapa A después
+  de la etapa C. Tampoco está definido si la configuración recalibrada necesita una nueva
+  evaluación de entrada: `calibration/entry` ya existiría y no se sobrescribe. T3b solo exige,
+  para la segunda confirmación, la autorización expresa, una primera confirmación completa, que
+  ningún intento de la primera confirmación haya sido una violación A2 y que los valores vengan
+  de una iteración posterior a la usada en la primera confirmación.
+- **Después de una violación A2** el procedimiento es STOP y consulta al autor (P1-18, P1-22); el
+  comando no permite repetir la confirmación afectada ni usarla para una segunda confirmación.
+
+**Pendiente de decisión separada (M-3, no autorizada en T3b):** `plant_energy: 30` y
+`plant_energy: 30.0` dan el mismo candidato y la misma física, pero distinto `config_hash`, porque
+el hash se calcula sobre el árbol YAML antes de normalizar los tipos y los overrides de T1 usan
+`repr` del valor tal como se escribió. La corrección propuesta (escribir los overrides con
+`float(...)`) toca código de T1. Mientras tanto, las especificaciones reales deben escribir
+`plant_energy` siempre con decimales (por ejemplo, `30.0`).
 
 **T4b (pendiente, decisión T1-2 del autor):** verificador de las restricciones de la máquina de
 estados que dependen de resultados, ejecutado antes de autorizar cada iteración: que S_A, S_B o
@@ -394,6 +445,7 @@ necesitan resultados.
 | T0b precisión de P1-16 (remisión a P1-13) | `38e1803` | `43776616239` ✅ |
 | T1 especificación y cargador de P1 | `1bd2c4d` | `43778824799` ✅ |
 | T2 comprobador A2 y ejecución por bloques | `85509b0` | `43780607071` ✅ |
+| T3 comando `pilot p1` y CSV de episodios y claves | `b53f547` | `43783541818` ✅ |
 
 **Incidencias durante F4:**
 
@@ -405,3 +457,8 @@ necesitan resultados.
   justificación errónea para limitar A4 (b) a la presa, una redefinición no autorizada de B5 y
   tres lecturas posibles de la alternancia. Todo se corrigió en T0b con las decisiones D1–D18 del
   autor.
+- La auditoría independiente de T3 (sondas sin episodios reales) encontró que una especificación
+  o configuración fuera del repositorio permitía usar las semillas de confirmación en calibración
+  sin que la comprobación del árbol limpio lo detectara, y que el comando no exigía la evaluación
+  de entrada antes de la confirmación ni el orden de las iteraciones. Se corrigió en T3b junto con
+  los hallazgos menores; M-3 quedó pendiente de una decisión separada.

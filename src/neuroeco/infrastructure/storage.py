@@ -10,6 +10,7 @@ import csv
 import datetime as dt
 import json
 import os
+import time
 import uuid
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
@@ -89,14 +90,46 @@ def create_partial_directory(target: Path) -> Path:
     return _unique_sibling(target, "partial", lambda path: path.mkdir())
 
 
-def publish_directory(partial: Path, target: Path) -> None:
+RENAME_ATTEMPTS = 5
+RENAME_FIRST_DELAY_SECONDS = 0.2  # doubled after each attempt: at most 3 s of waiting in total
+
+
+def rename_directory(
+    source: Path, target: Path, *, sleep: Callable[[float], None] = time.sleep
+) -> None:
+    """Rename ``source`` to ``target``, which must not exist, with bounded retries.
+
+    On Windows another process (antivirus, indexer, file explorer) may hold a handle inside the
+    directory for a moment and the rename fails with ``PermissionError``: it is retried at most
+    ``RENAME_ATTEMPTS`` times. Any other error, or an existing ``target``, fails at once.
+    """
+    for attempt in range(RENAME_ATTEMPTS):
+        if target.exists():
+            raise FileExistsError(f"{target} already exists; results are never overwritten")
+        try:
+            os.rename(source, target)
+        except PermissionError:
+            if attempt == RENAME_ATTEMPTS - 1:
+                raise
+            sleep(RENAME_FIRST_DELAY_SECONDS * 2**attempt)
+        else:
+            return
+
+
+def publish_directory(
+    partial: Path, target: Path, *, sleep: Callable[[float], None] = time.sleep
+) -> None:
     """Make a completed ``partial`` directory visible as ``target`` in one rename."""
-    if target.exists():
-        raise FileExistsError(f"{target} already exists; results are never overwritten")
-    os.rename(partial, target)
+    rename_directory(partial, target, sleep=sleep)
 
 
-def reserve_failure_directory(target: Path, now: dt.datetime, source: Path | None = None) -> Path:
+def reserve_failure_directory(
+    target: Path,
+    now: dt.datetime,
+    source: Path | None = None,
+    *,
+    sleep: Callable[[float], None] = time.sleep,
+) -> Path:
     """``<target>.failed-<YYYYMMDDTHHMMSSZ>-<8 hex>``, unique; never the result directory.
 
     With ``source`` (a partial directory) the failure directory is that directory renamed;
@@ -108,4 +141,4 @@ def reserve_failure_directory(target: Path, now: dt.datetime, source: Path | Non
     label = f"failed-{now.strftime('%Y%m%dT%H%M%SZ')}"
     if source is None:
         return _unique_sibling(target, label, lambda path: path.mkdir())
-    return _unique_sibling(target, label, lambda path: os.rename(source, path))
+    return _unique_sibling(target, label, lambda path: rename_directory(source, path, sleep=sleep))

@@ -1,22 +1,17 @@
-"""F4 T3: the ``neuroeco pilot p1`` command (ADR-033; decisions T3-1 to T3-9).
+"""F4 T3: the ``neuroeco pilot p1`` command (ADR-033; decisions T3-1 to T3-9, adapted in T3b).
 
 Every run uses a temporary copy of the configuration with a synthetic P1 specification
 (seed_group >= 1000, D16), t_max = 40 and energetics scaled so that E1 and E2 still hold, so state
-K is evaluated, never bypassed. Results go to a temporary directory. The git cleanliness check is
-simulated by replacing the provenance collector of the command module; the production check is
-unchanged. No real P1 episode, specification or result is created.
+K is evaluated, never bypassed. Results go to a temporary directory. The git facts (clean tree,
+tracked inputs, synchronized upstream) are simulated by replacing two functions of the command
+module (T3-5); the real checks are exercised in ``test_pilot_p1_git.py``. No real P1 episode,
+specification or result is created.
 """
 
-import csv
 import dataclasses
-import json
-import shutil
-from pathlib import Path
 
 import numpy as np
 import pytest
-import yaml
-from typer.testing import CliRunner
 
 from neuroeco.application import calibration
 from neuroeco.application.calibration import (
@@ -28,111 +23,27 @@ from neuroeco.application.calibration import (
 from neuroeco.application.seeding import Purpose, SeedRegistry
 from neuroeco.infrastructure.config_loader import load_config
 from neuroeco.presentation import pilot_p1
-from neuroeco.presentation.cli import app
-
-CONFIGS = Path(__file__).resolve().parents[2] / "configs"
-VALUES = {
-    "plant_energy": 30.0,
-    "regrow_delay": 50,
-    "n_plants_a": 40,
-    "n_plants_b": 15,
-    "n_predators_c": 8,
-    "prey_flee_threshold": 0.3,
-    "prey_cruise_fraction": 0.5,
-    "predator_cruise_fraction": 0.5,
-}
-SYNTHETIC_SPEC = {
-    "pilot": "P1",
-    "blocks": {
-        "calibration": {"episodes": 2, "seed_groups": {"a": 1000, "b": 1001, "c": 1002}},
-        "confirmation": {"episodes": 2, "seed_groups": {"a": 1010, "b": 1011, "c": 1012}},
-        "second_confirmation": {"episodes": 2, "seed_groups": {"a": 1020, "b": 1021, "c": 1022}},
-    },
-    "grids": {"prey_flee_threshold": [0.2, 0.3, 0.4, 0.5], "cruise_fraction": [0.3, 0.5, 0.7]},
-}
+from p1_support import (
+    VALUES,
+    assert_no_results,
+    failures,
+    invoke,
+    make_configs,
+    only_failure,
+    read_csv,
+    read_json,
+    register,
+    run_chain,
+    run_ok,
+    simulate_git,
+)
 
 
 @pytest.fixture
 def setup(tmp_path, monkeypatch):
-    """Synthetic configuration, empty output root and a simulated clean git tree."""
-    configs = tmp_path / "configs"
-    shutil.copytree(CONFIGS, configs)
-    base = yaml.safe_load((configs / "base.yaml").read_text(encoding="utf-8"))
-    base["world"]["t_max"] = 40
-    for species in ("prey", "predator"):
-        base["world"][species]["c_basal"] = 4.0  # E1: 80 / 4 = 20 = 0.5 * t_max
-        base["world"][species]["c_move"] = 8.0  # E2
-    (configs / "base.yaml").write_text(yaml.safe_dump(base), encoding="utf-8")
-    (configs / "pilots" / "p1.yaml").write_text(yaml.safe_dump(SYNTHETIC_SPEC), encoding="utf-8")
+    """Synthetic configuration, empty output root and simulated git facts."""
     output = tmp_path / "out"
-    state = {"git_dirty": False, "files_at_capture": []}
-    real = pilot_p1.collect_provenance
-
-    def simulated(command, cwd, config_hash):
-        state["files_at_capture"].append(sorted(p.name for p in output.rglob("*")))
-        return {**real(command, cwd, config_hash), "git_dirty": state["git_dirty"]}
-
-    monkeypatch.setattr(pilot_p1, "collect_provenance", simulated)
-    return configs, output, state
-
-
-def register(configs: Path, number: int, stage: str, changed: str = "none", **values) -> Path:
-    path = configs / "pilots" / "p1" / "iterations" / f"{number:03d}.yaml"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    content = {
-        "iteration": number,
-        "stage": stage,
-        "changed_parameter": changed,
-        "values": {**VALUES, **values},
-        "motive": "synthetic test iteration",
-        "exploratory_observations": "",
-    }
-    path.write_text(yaml.safe_dump(content), encoding="utf-8")
-    return path
-
-
-def invoke(configs: Path, output: Path, *arguments: str):
-    return CliRunner().invoke(
-        app,
-        [
-            "pilot",
-            "p1",
-            *arguments,
-            "--spec",
-            str(configs / "pilots" / "p1.yaml"),
-            "--config-dir",
-            str(configs),
-            "--output-root",
-            str(output),
-        ],
-    )
-
-
-def read_csv(path: Path) -> tuple[list[str], list[dict[str, str]]]:
-    with path.open(encoding="utf-8", newline="") as handle:
-        reader = csv.DictReader(handle)
-        return list(reader.fieldnames or []), list(reader)
-
-
-def failures(output: Path) -> list[Path]:
-    return sorted(output.rglob("*.failed-*"))
-
-
-def only_failure(output: Path) -> tuple[Path, dict]:
-    [directory] = failures(output)
-    assert not list(directory.glob("*.csv")), "a failure never keeps CSV files"
-    return directory, json.loads((directory / "failure.json").read_text(encoding="utf-8"))
-
-
-def assert_no_results(output: Path) -> None:
-    assert not list(output.rglob("*.csv"))
-    assert not list(output.rglob("*.partial-*"))
-
-
-def three_stages(configs: Path) -> Path:
-    register(configs, 1, "A")
-    register(configs, 2, "B")
-    return register(configs, 3, "C")
+    return make_configs(tmp_path), output, simulate_git(monkeypatch, output)
 
 
 # ---------------------------------------------------------------- a successful iteration
@@ -178,7 +89,7 @@ def test_iteration_writes_episodes_keys_and_provenance(setup) -> None:
         ("6", "1000", "1", "7"),
     ]
 
-    provenance = json.loads((destination / "provenance.json").read_text(encoding="utf-8"))
+    provenance = read_json(destination / "provenance.json")
     assert provenance["status"] == "completed" and provenance["git_dirty"] is False
     assert (provenance["mode"], provenance["block"], provenance["bootstrap_run"]) == (
         "iteration",
@@ -186,6 +97,9 @@ def test_iteration_writes_episodes_keys_and_provenance(setup) -> None:
         1,
     )
     assert provenance["episodes_planned"] == provenance["episodes_written"] == 24
+    assert provenance["episodes_discarded"] == 0 and provenance["values_iteration"] == 1
+    assert provenance["prerequisites"] == [] and provenance["previous_attempts"] == []
+    assert provenance["git_checks"]["synchronized"] is True
     assert provenance["values"] == VALUES and provenance["state_k"]["a1"] is True
     assert provenance["project_seed"] == keys[0]["project_seed"]
     assert provenance["dependencies"]["numpy"] and provenance["uv_lock_sha256"]
@@ -194,10 +108,10 @@ def test_iteration_writes_episodes_keys_and_provenance(setup) -> None:
 
 def test_key_columns_in_the_csv_rebuild_the_episode_streams(setup) -> None:
     configs, output, _ = setup
-    invoke(configs, output, "--iteration", str(register(configs, 1, "A")))
+    run_ok(configs, output, "--iteration", str(register(configs, 1, "A")))
     destination = output / "calibration" / "iteration_001"
     _, rows = read_csv(destination / "episodes.csv")
-    seed = int(json.loads((destination / "provenance.json").read_text())["project_seed"])
+    seed = int(read_json(destination / "provenance.json")["project_seed"])
     for row in (rows[0], rows[-1]):
         keys = keys_from_columns({k: int(row[k]) for k in calibration.KEY_COLUMNS})
         expected = SeedRegistry(seed).episode_streams(
@@ -218,8 +132,8 @@ def test_equivalent_runs_write_byte_identical_csv_files(setup, tmp_path) -> None
     configs, output, _ = setup
     path = register(configs, 1, "A")
     second = tmp_path / "second"
-    assert invoke(configs, output, "--iteration", str(path)).exit_code == 0
-    assert invoke(configs, second, "--iteration", str(path)).exit_code == 0
+    run_ok(configs, output, "--iteration", str(path))
+    run_ok(configs, second, "--iteration", str(path))
     for name in ("episodes.csv", "bootstrap_keys.csv"):
         first_bytes = (output / "calibration" / "iteration_001" / name).read_bytes()
         assert first_bytes == (second / "calibration" / "iteration_001" / name).read_bytes()
@@ -230,37 +144,44 @@ def test_equivalent_runs_write_byte_identical_csv_files(setup, tmp_path) -> None
 
 def test_entry_evaluation_runs_the_35_conditions(setup) -> None:
     configs, output, _ = setup
-    last = three_stages(configs)
-    result = invoke(configs, output, "--entry-evaluation", "--values-from", str(last))
-    assert result.exit_code == 0, result.output
+    last = run_chain(configs, output)
+    run_ok(configs, output, "--entry-evaluation", "--values-from", str(last))
     destination = output / "calibration" / "entry"
     _, rows = read_csv(destination / "episodes.csv")
     assert len(rows) == 35 * 2 and {r["stage"] for r in rows} == {"entry"}
     _, keys = read_csv(destination / "bootstrap_keys.csv")
     assert [k["comparison"] for k in keys] == [str(i) for i in range(1, 9)]
     assert {(k["seed_group"], k["run"]) for k in keys} == {("1000", "0")}
+    provenance = read_json(destination / "provenance.json")
+    assert [p["directory"].rsplit("/", 1)[-1] for p in provenance["prerequisites"]] == [
+        "iteration_001",
+        "iteration_002",
+        "iteration_003",
+    ]
 
 
 def test_confirmation_needs_the_author_authorization(setup) -> None:
     configs, output, _ = setup
-    last = three_stages(configs)
+    last = run_chain(configs, output)
+    run_ok(configs, output, "--entry-evaluation", "--values-from", str(last))
     refused = invoke(configs, output, "--confirmation", "--values-from", str(last))
     assert refused.exit_code == 1
-    assert_no_results(output)
-    _, failure = only_failure(output)
+    [directory] = failures(output)
+    failure = read_json(directory / "failure.json")
     assert failure["phase"] == "preflight" and "--author-authorized" in failure["message"]
+    assert not (output / "confirmation" / "evaluation").exists()
 
-    result = invoke(
-        configs, output, "--confirmation", "--values-from", str(last), "--author-authorized"
-    )
-    assert result.exit_code == 0, result.output
+    run_ok(configs, output, "--confirmation", "--values-from", str(last), "--author-authorized")
     destination = output / "confirmation" / "evaluation"
     _, rows = read_csv(destination / "episodes.csv")
     assert len(rows) == 70 and {r["seed_group"] for r in rows} == {"1010", "1011", "1012"}
     _, keys = read_csv(destination / "bootstrap_keys.csv")
     assert {(k["seed_group"], k["run"]) for k in keys} == {("1010", "0")}
-    provenance = json.loads((destination / "provenance.json").read_text(encoding="utf-8"))
+    provenance = read_json(destination / "provenance.json")
     assert provenance["author_authorized"] is True
+    # the refused attempt is a failure record without A2 violation, kept in the provenance
+    [attempt] = provenance["previous_attempts"]
+    assert (attempt["kind"], attempt["a2_violation"]) == ("failure", False)
 
 
 def test_values_must_come_from_the_last_stage_c_iteration(setup) -> None:
@@ -306,7 +227,7 @@ def test_usage_errors_create_nothing(setup, arguments) -> None:
 def test_existing_destination_is_refused_and_kept(setup) -> None:
     configs, output, _ = setup
     path = register(configs, 1, "A")
-    assert invoke(configs, output, "--iteration", str(path)).exit_code == 0
+    run_ok(configs, output, "--iteration", str(path))
     destination = output / "calibration" / "iteration_001"
     before = (destination / "episodes.csv").read_bytes()
     result = invoke(configs, output, "--iteration", str(path))
@@ -324,8 +245,9 @@ def test_dirty_tree_is_refused_and_recorded(setup) -> None:
     assert_no_results(output)
     directory, failure = only_failure(output)
     assert "working tree must be clean" in failure["message"]
-    provenance = json.loads((directory / "provenance.json").read_text(encoding="utf-8"))
+    provenance = read_json(directory / "provenance.json")
     assert provenance["git_dirty"] is True and provenance["status"] == "failed"
+    assert provenance["episodes_written"] is None and provenance["episodes_discarded"] == 0
 
 
 def test_state_k_rejects_a_candidate_without_running(setup) -> None:
@@ -337,6 +259,10 @@ def test_state_k_rejects_a_candidate_without_running(setup) -> None:
     assert state["files_at_capture"] == []  # refused before the provenance capture
     _, failure = only_failure(output)
     assert "A1 does not hold" in failure["message"] and "E5" in failure["message"]
+    # the rejected candidate is documented in its own failure record (T3b, M-5)
+    assert failure["mode"]["values"]["plant_energy"] == 60.0
+    assert failure["mode"]["values_source"]["sha256"]
+    assert set(failure["git"]) == {"commit", "dirty", "upstream", "upstream_commit"}
 
 
 def test_invalid_static_sequence_is_refused(setup) -> None:
@@ -353,7 +279,7 @@ def test_unregistered_specification_is_refused(setup, tmp_path) -> None:
     configs, output, _ = setup
     register(configs, 1, "A")
     stray = tmp_path / "001.yaml"
-    shutil.copy(configs / "pilots" / "p1" / "iterations" / "001.yaml", stray)
+    stray.write_bytes((configs / "pilots" / "p1" / "iterations" / "001.yaml").read_bytes())
     result = invoke(configs, output, "--iteration", str(stray))
     assert result.exit_code == 1
     _, failure = only_failure(output)
@@ -431,8 +357,9 @@ def test_an_a2_violation_stops_the_block_and_is_recorded(setup, monkeypatch) -> 
         "item": 0,
         "label": "calibration/A/random_prey/seed_group 1000/item 0",
     }
-    provenance = json.loads((directory / "provenance.json").read_text(encoding="utf-8"))
+    provenance = read_json(directory / "provenance.json")
     assert provenance["status"] == "failed"
+    assert provenance["episodes_written"] is None and provenance["episodes_discarded"] == 2
 
 
 def test_other_errors_keep_type_message_and_notes(setup, monkeypatch) -> None:
@@ -468,3 +395,21 @@ def test_a_failure_while_writing_leaves_no_csv(setup, monkeypatch) -> None:
     directory, failure = only_failure(output)
     assert failure["phase"] == "writing" and failure["episodes_completed"] == 24
     assert sorted(p.name for p in directory.iterdir()) == ["failure.json", "provenance.json"]
+
+
+def test_a_failed_publication_declares_the_episodes_discarded(setup, monkeypatch) -> None:
+    """M-4: after the completed provenance was written, a failed publication discards it all."""
+    configs, output, _ = setup
+
+    def locked(partial, target):
+        raise PermissionError("synthetic lock")
+
+    monkeypatch.setattr(pilot_p1, "publish_directory", locked)
+    result = invoke(configs, output, "--iteration", str(register(configs, 1, "A")))
+    assert result.exit_code == 1
+    assert_no_results(output)
+    directory, failure = only_failure(output)
+    provenance = read_json(directory / "provenance.json")
+    assert (provenance["status"], provenance["episodes_written"]) == ("failed", None)
+    assert (provenance["finished_utc"], provenance["duration_seconds"]) == (None, None)
+    assert provenance["episodes_discarded"] == failure["episodes_completed"] == 24

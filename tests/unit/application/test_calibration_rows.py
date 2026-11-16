@@ -1,7 +1,9 @@
-"""F4 T3: episode rows, bootstrap key rows and the independent block-group check (ADR-033).
+"""F4 T3 and T3b: episode rows, bootstrap key rows, the block-group and exact-plan checks and the
+approved seed-group table (ADR-033).
 
-Records are built by hand to reach the censoring edge cases of B3 and B6 exactly; every seed
-group is synthetic (>= 1000, D16). No episode is run.
+Records are built by hand to reach the censoring edge cases of B3 and B6 exactly; every executed
+seed group is synthetic (>= 1000, D16). The real groups 10-32 appear only as declarations that
+the table check accepts or refuses; no generator is created from them. No episode is run.
 """
 
 import dataclasses
@@ -10,11 +12,14 @@ import math
 import numpy as np
 import pytest
 
+from neuroeco.application import calibration as calibration_module
 from neuroeco.application.calibration import (
+    APPROVED_BLOCKS,
     BOOTSTRAP_COLUMNS,
     EPISODE_COLUMN_TYPES,
     EPISODE_COLUMNS,
     KEY_COLUMNS,
+    REAL_SEED_GROUPS,
     BlockSet,
     BlockSpec,
     CandidateValues,
@@ -23,7 +28,9 @@ from neuroeco.application.calibration import (
     P1Spec,
     ScenarioGroups,
     bootstrap_rows,
+    check_approved_seed_groups,
     check_block_groups,
+    check_block_plan,
     episode_key_columns,
     episode_row,
     float_text,
@@ -273,6 +280,96 @@ def test_tasks_are_checked_by_group_not_by_label() -> None:
         check_block_groups(relabeled, SPEC, "calibration")
     with pytest.raises(ValueError, match="task of block 'confirmation'"):
         check_block_groups(confirmation, SPEC, "calibration")
+
+
+def p1_spec(calibration, confirmation, second) -> P1Spec:
+    return P1Spec(
+        "P1",
+        BlockSet(
+            calibration=BlockSpec(calibration[0], ScenarioGroups(*calibration[1])),
+            confirmation=BlockSpec(confirmation[0], ScenarioGroups(*confirmation[1])),
+            second_confirmation=BlockSpec(second[0], ScenarioGroups(*second[1])),
+        ),
+        SPEC.grids,
+    )
+
+
+def test_the_approved_table_and_synthetic_groups_pass() -> None:
+    """Only declarations: no generator is created from the real groups (D16)."""
+    approved = p1_spec((30, (10, 11, 12)), (50, (20, 21, 22)), (50, (30, 31, 32)))
+    check_approved_seed_groups(approved)
+    check_approved_seed_groups(SPEC)  # synthetic: no constraint
+    check_approved_seed_groups(p1_spec((7, (2, 3, 4)), (3, (5, 6, 7)), (3, (33, 34, 35))))
+    assert APPROVED_BLOCKS == {
+        "calibration": (30, (10, 11, 12)),
+        "confirmation": (50, (20, 21, 22)),
+        "second_confirmation": (50, (30, 31, 32)),
+    }
+    assert (min(REAL_SEED_GROUPS), max(REAL_SEED_GROUPS)) == (10, 32)
+
+
+@pytest.mark.parametrize(
+    "blocks",
+    [
+        ((30, (20, 21, 22)), (50, (10, 11, 12)), (50, (30, 31, 32))),  # swapped blocks
+        ((30, (10, 11, 12)), (50, (30, 31, 32)), (50, (20, 21, 22))),  # swapped confirmations
+        ((30, (11, 10, 12)), (50, (20, 21, 22)), (50, (30, 31, 32))),  # swapped scenarios
+        ((31, (10, 11, 12)), (50, (20, 21, 22)), (50, (30, 31, 32))),  # P1-5 size
+        ((30, (10, 11, 12)), (49, (20, 21, 22)), (50, (30, 31, 32))),
+        ((2, (1000, 1001, 1002)), (2, (20, 1011, 1012)), (2, (1020, 1021, 1022))),  # one real
+        ((2, (32, 1001, 1002)), (2, (1010, 1011, 1012)), (2, (1020, 1021, 1022))),
+    ],
+)
+def test_any_real_group_requires_the_whole_approved_table(blocks) -> None:
+    with pytest.raises(ValueError, match="must match ADR-033"):
+        check_approved_seed_groups(p1_spec(*blocks))
+
+
+def test_the_exact_plan_is_accepted() -> None:
+    for block in ("calibration", "confirmation", "second_confirmation"):
+        for scenarios in (("A",), ("A", "B"), ("A", "C"), ("A", "B", "C")):
+            tasks = plan_block(SPEC, block, VALUES, scenarios=scenarios)
+            check_block_plan(tasks, SPEC, block, VALUES, scenarios)
+
+
+def test_incomplete_or_altered_plans_are_refused() -> None:
+    tasks = plan_block(SPEC, "calibration", VALUES, scenarios=("A", "B"))
+    other = dataclasses.replace(VALUES, plant_energy=35.0)
+    cases = {
+        "missing task": tasks[:-1],
+        "extra scenario": plan_block(SPEC, "calibration", VALUES, scenarios=("A", "B", "C")),
+        "reordered": (tasks[1], tasks[0], *tasks[2:]),
+        "foreign overrides": (
+            dataclasses.replace(
+                tasks[0], overrides=calibration_module.scenario_overrides(other, "A")
+            ),
+            *tasks[1:],
+        ),
+        "foreign condition": (
+            dataclasses.replace(tasks[0], condition=tasks[2].condition),
+            *tasks[1:],
+        ),
+        "subset of conditions": plan_block(
+            SPEC, "calibration", VALUES, scenarios=("A", "B"), conditions=("rules",)
+        ),
+    }
+    refused = []
+    for name, plan in cases.items():
+        try:
+            check_block_plan(plan, SPEC, "calibration", VALUES, ("A", "B"))
+        except ValueError:
+            refused.append(name)
+    assert refused == list(cases)
+
+
+def test_plan_check_keeps_the_specific_group_message_and_rejects_text() -> None:
+    confirmation = plan_block(SPEC, "confirmation", VALUES, scenarios=("A",))
+    relabeled = [dataclasses.replace(t, block="calibration") for t in confirmation]
+    with pytest.raises(ValueError, match="seed_group 1010 is not the group 1000"):
+        check_block_plan(relabeled, SPEC, "calibration", VALUES, ("A",))
+    tasks = plan_block(SPEC, "calibration", VALUES, scenarios=("A", "B"))
+    with pytest.raises(ValueError, match="scenarios must be a sequence"):
+        check_block_plan(tasks, SPEC, "calibration", VALUES, "AB")
 
 
 def test_other_group_check_failures() -> None:

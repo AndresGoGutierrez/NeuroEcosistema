@@ -60,6 +60,58 @@ def file_sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def git_toplevel(cwd: Path) -> Path | None:
+    """Root of the git working tree that contains ``cwd``; None outside git or without git."""
+    root = _git(["rev-parse", "--show-toplevel"], cwd)
+    return Path(root).resolve() if root else None
+
+
+def is_inside(path: Path, root: Path) -> bool:
+    """True when ``path`` (resolved, symbolic links followed) lies under ``root``."""
+    return path.resolve().is_relative_to(root.resolve())
+
+
+def git_untracked(paths: Sequence[Path], root: Path) -> list[Path] | None:
+    """The ``paths`` under ``root`` that git does not track (P1-19); None if git fails.
+
+    Paths are matched literally (no pathspec patterns). Paths outside ``root`` must be filtered
+    out by the caller with ``is_inside``.
+    """
+    root = root.resolve()
+    relative = {path: path.resolve().relative_to(root).as_posix() for path in paths}
+    if not relative:
+        return []
+    listed = _git(["--literal-pathspecs", "ls-files", "-z", "--", *relative.values()], root)
+    if listed is None:
+        return None
+    fold = str.casefold if os.name == "nt" else str  # NTFS paths are case-insensitive
+    tracked = {fold(name) for name in listed.split("\0") if name}
+    return [path for path, name in relative.items() if fold(name) not in tracked]
+
+
+def git_upstream(cwd: Path) -> dict[str, str | None]:
+    """The upstream branch of HEAD and its commit, from the local remote-tracking reference.
+
+    No fetch is made: the reference is the one the last push or fetch left (T3b, M-1).
+    """
+    return {
+        "ref": _git(["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"], cwd),
+        "commit": _git(["rev-parse", "@{u}"], cwd),
+    }
+
+
+def git_state(cwd: Path) -> dict[str, Any]:
+    """Commit, cleanliness and upstream of the working tree; never raises (failure records)."""
+    status = _git(["status", "--porcelain"], cwd)
+    upstream = git_upstream(cwd)
+    return {
+        "commit": _git(["rev-parse", "HEAD"], cwd),
+        "dirty": None if status is None else bool(status),
+        "upstream": upstream["ref"],
+        "upstream_commit": upstream["commit"],
+    }
+
+
 def dependency_versions(names: Sequence[str]) -> dict[str, str | None]:
     """Installed versions read from package metadata, without importing the packages."""
     versions: dict[str, str | None] = {}

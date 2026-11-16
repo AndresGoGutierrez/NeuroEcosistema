@@ -1,4 +1,4 @@
-"""Command ``neuroeco pilot p1``: one block of the P1 calibration (ADR-020, ADR-033; F4 T3).
+"""Command ``neuroeco pilot p1``: one block of the P1 calibration (ADR-020, ADR-033; F4 T3, T3b).
 
 Modes (exactly one per invocation, T3-1):
 
@@ -9,12 +9,22 @@ Modes (exactly one per invocation, T3-1):
 - ``--confirmation`` / ``--second-confirmation`` with ``--values-from`` and
   ``--author-authorized``: the 35 conditions of the confirmation block (P1-21); ``run`` = 0.
 
-Before any episode the command validates, in this order: the P1 specification; every registered
-iteration and round specification and their static sequence; the resolved configurations and
-state K (A1); the seed groups of the planned episodes; the author's authorization for
-confirmation blocks; that the destination does not exist; and that the git working tree is
-clean, as recorded by the provenance captured before anything is written (P1-19). There is no
-option to bypass these checks.
+Before any episode the command validates, in this order:
+
+1. the P1 specification, and the approved seed groups and sizes if it declares real groups;
+2. every registered iteration and round specification (strict file names) and their static
+   sequence;
+3. earlier attempts at the same destination (D18) and the completed results this mode needs
+   (iteration N needs 1..N-1; the entry evaluation the whole chain; the confirmation the entry
+   evaluation; the second confirmation the first one, followed by a recalibration);
+4. the resolved configurations and state K (A1);
+5. the exact plan of the block (seed groups, conditions, items and overrides);
+6. the author's authorization for confirmation blocks, and that the destination does not exist;
+7. after capturing the provenance and before writing anything (P1-19): a clean git working tree,
+   every file read and the output root inside the repository and tracked by git, and HEAD
+   synchronized with its upstream branch (pushed).
+
+There is no option to bypass these checks.
 
 Results are assembled in ``<destination>.partial-<id>`` and published in one rename when the
 block is complete (T3-3). Any error after the destination is known leaves a separate
@@ -24,10 +34,15 @@ it was captured) and no CSV file (T3-4). Rule-tuning rounds are not run here (ta
 
 from __future__ import annotations
 
+import csv
 import dataclasses
 import datetime as dt
+import glob
+import json
+import re
 import sys
 import time
+from collections.abc import Mapping, Sequence
 from contextlib import closing
 from dataclasses import dataclass
 from pathlib import Path
@@ -51,7 +66,8 @@ from neuroeco.application.calibration import (
     RoundSpec,
     admissibility,
     bootstrap_rows,
-    check_block_groups,
+    check_approved_seed_groups,
+    check_block_plan,
     check_calibration_sequence,
     episode_row,
     iter_block,
@@ -62,6 +78,9 @@ from neuroeco.application.calibration import (
 from neuroeco.application.configs import ResolvedConfig
 from neuroeco.bootstrap import DEFAULT_CONFIG_DIR, EXPLORATORY_SEED_GROUP, build_policy
 from neuroeco.infrastructure.config_loader import (
+    BASE_FILE,
+    BASELINES_FILE,
+    SCENARIOS_FILE,
     load_config,
     load_iteration_spec,
     load_p0_spec,
@@ -72,6 +91,10 @@ from neuroeco.infrastructure.provenance import (
     collect_provenance,
     dependency_versions,
     file_sha256,
+    git_state,
+    git_toplevel,
+    git_untracked,
+    is_inside,
 )
 from neuroeco.infrastructure.storage import (
     create_partial_directory,
@@ -86,6 +109,12 @@ FAILURE_SCHEMA = "neuroeco.p1-failure/1"
 DEFAULT_SPEC = DEFAULT_CONFIG_DIR / "pilots" / "p1.yaml"
 DEFAULT_OUTPUT_ROOT = Path("results/pilots/p1")
 REGISTRY_DIRECTORY = "p1"  # configs/pilots/p1/{iterations,rounds} next to p1.yaml (T1-4)
+ITERATIONS_DIRECTORY = "iterations"
+ROUNDS_DIRECTORY = "rounds"
+ITERATION_FILE = re.compile(r"\d{3}\.yaml")
+ROUND_FILE = re.compile(r"\d{2}\.yaml")
+CALIBRATION_BLOCK = "calibration"
+ENTRY_LEAF = "entry"
 CONFIRMATION_LEAF = "evaluation"
 DEPENDENCIES = ("numpy", "scipy", "pandas", "pyyaml", "typer", "threadpoolctl", "pygame-ce")
 EXIT_FAILURE = 1
@@ -112,6 +141,7 @@ class Mode:
     scenarios: tuple[str, ...]
     values: CandidateValues
     source: Path  # the iteration specification that provides the values
+    values_iteration: int  # number of that iteration
     leaf: str
 
     def destination(self, output_root: Path) -> Path:
@@ -124,6 +154,13 @@ class Registry:
 
     iterations: tuple[tuple[Path, IterationSpec], ...]
     rounds: tuple[tuple[Path, RoundSpec], ...]
+
+    def sha256(self, number: int) -> str:
+        """SHA-256 of the registered specification of iteration ``number``."""
+        for path, spec in self.iterations:
+            if spec.iteration == number:
+                return file_sha256(path)
+        raise P1RefusalError(f"iteration {number} is not registered (P1-19)")
 
 
 def select_mode(
@@ -163,36 +200,59 @@ def select_mode(
         spec = load_iteration_spec(iteration)
         return Mode(
             name=name,
-            block="calibration",
+            block=CALIBRATION_BLOCK,
             stage=spec.stage,
             iteration=spec.iteration,
             run=spec.iteration,
             scenarios=stage_scenarios(spec.stage),
             values=spec.values,
             source=iteration,
+            values_iteration=spec.iteration,
             leaf=f"iteration_{spec.iteration:03d}",
         )
     if values_from is None:
         raise P1RefusalError(f"--values-from is required with the {name} mode")
     spec = load_iteration_spec(values_from)
     if name == "entry":
-        block, stage, run, leaf = "calibration", ENTRY_STAGE, ENTRY_EVALUATION_RUN, "entry"
+        block, stage, run, leaf = CALIBRATION_BLOCK, ENTRY_STAGE, ENTRY_EVALUATION_RUN, ENTRY_LEAF
     else:
         block, stage, run, leaf = name, CONFIRMATION_STAGE, CONFIRMATION_RUN, CONFIRMATION_LEAF
-    return Mode(name, block, stage, 0, run, SCENARIOS, spec.values, values_from, leaf)
+    return Mode(
+        name, block, stage, 0, run, SCENARIOS, spec.values, values_from, spec.iteration, leaf
+    )
+
+
+def _registry_files(directory: Path, pattern: re.Pattern[str], kind: str) -> list[Path]:
+    """The specification files of one registry directory; anything else is refused (M-10)."""
+    if not directory.exists():
+        return []
+    entries = sorted(directory.iterdir())
+    unexpected = [e.name for e in entries if not (e.is_file() and pattern.fullmatch(e.name))]
+    if unexpected:
+        raise P1RefusalError(
+            f"{directory}: unexpected entries {unexpected}; only {kind} files are allowed"
+        )
+    return entries
 
 
 def load_registry(spec_path: Path) -> Registry:
     """Every iteration and round file registered next to ``p1.yaml``, in numeric order."""
     base = spec_path.parent / REGISTRY_DIRECTORY
+    if base.exists():
+        allowed = {ITERATIONS_DIRECTORY, ROUNDS_DIRECTORY}
+        unexpected = sorted(
+            e.name for e in base.iterdir() if not (e.is_dir() and e.name in allowed)
+        )
+        if unexpected:
+            raise P1RefusalError(f"{base}: unexpected entries {unexpected}")
     iterations = []
-    for path in sorted((base / "iterations").glob("*.yaml")):
+    for path in _registry_files(base / ITERATIONS_DIRECTORY, ITERATION_FILE, "NNN.yaml"):
         spec = load_iteration_spec(path)
         if path.stem != f"{spec.iteration:03d}":
             raise P1RefusalError(f"{path}: iteration {spec.iteration} must be in a file NNN.yaml")
         iterations.append((path, spec))
     rounds = []
-    for path in sorted((base / "rounds").glob("*.yaml")):
+    for path in _registry_files(base / ROUNDS_DIRECTORY, ROUND_FILE, "RR.yaml"):
         spec = load_round_spec(path)
         if path.stem != f"{spec.round_number:02d}":
             raise P1RefusalError(f"{path}: round {spec.round_number} must be in a file RR.yaml")
@@ -207,6 +267,202 @@ def _registered(path: Path, registry: Registry) -> IterationSpec:
     raise P1RefusalError(f"{path} is not a registered iteration specification (P1-19)")
 
 
+# ---------------------------------------------------------------- earlier attempts (M-6, D18)
+
+
+def _read_json(path: Path) -> Any:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+
+
+def _attempt(directory: Path) -> dict[str, Any]:
+    """Classify one ``.failed-`` directory: a failure record, an interrupted run or unknown."""
+    record = {"directory": directory.name}
+    failure = _read_json(directory / FAILURE_FILE)
+    if isinstance(failure, dict) and failure.get("schema") == FAILURE_SCHEMA:
+        return {
+            **record,
+            "kind": "failure",
+            "phase": failure.get("phase"),
+            "error_type": failure.get("error_type"),
+            "timestamp_utc": failure.get("timestamp_utc"),
+            "a2_violation": failure.get("a2_violation") is not None,
+        }
+    if not (directory / FAILURE_FILE).exists():
+        provenance = _read_json(directory / PROVENANCE_FILE)
+        if isinstance(provenance, dict) and provenance.get("status") == "running":
+            # A recovered partial directory (power cut, killed process): an infrastructure
+            # failure by construction, since an A2 violation is always recorded by the command.
+            return {**record, "kind": "interrupted", "a2_violation": False}
+    return {**record, "kind": "unrecognized", "a2_violation": None}
+
+
+def list_attempts(destination: Path, exclude: Path | None = None) -> list[dict[str, Any]]:
+    """Partial and failed directories left next to ``destination`` by earlier attempts."""
+    parent, prefix = destination.parent, glob.escape(destination.name)
+    if not parent.is_dir():
+        return []
+    attempts: list[dict[str, Any]] = [
+        {"directory": p.name, "kind": "partial", "a2_violation": None}
+        for p in sorted(parent.glob(prefix + ".partial-*"))
+        if exclude is None or p.name != exclude.name
+    ]
+    attempts.extend(_attempt(p) for p in sorted(parent.glob(prefix + ".failed-*")))
+    return attempts
+
+
+def check_attempts(mode: Mode, destination: Path, output_root: Path) -> list[dict[str, Any]]:
+    """Earlier attempts at this destination; D18 rules for the confirmation blocks."""
+    attempts = list_attempts(destination)
+    partial = [a["directory"] for a in attempts if a["kind"] == "partial"]
+    if partial:
+        raise P1RefusalError(
+            f"interrupted attempt(s) {partial} must be recovered first "
+            "(docs/p1_data_dictionary.md, partial directories)"
+        )
+    if mode.block not in CONFIRMATION_BLOCKS:
+        return attempts
+    unknown = [a["directory"] for a in attempts if a["kind"] == "unrecognized"]
+    if unknown:
+        raise P1RefusalError(
+            f"earlier attempt(s) {unknown} have no valid failure record: an infrastructure "
+            "failure cannot be told apart from an A2 violation (D18)"
+        )
+    violations = [a["directory"] for a in attempts if a["a2_violation"]]
+    if violations:
+        raise P1RefusalError(
+            f"earlier attempt(s) {violations} stopped on an A2 violation: a confirmation is only "
+            "repeated after an infrastructure failure, never after an A2 violation (D18)"
+        )
+    if mode.name == "second_confirmation":
+        first = list_attempts(output_root / "confirmation" / CONFIRMATION_LEAF)
+        blocked = [a["directory"] for a in first if a["a2_violation"] is not False]
+        if blocked:
+            raise P1RefusalError(
+                f"first-confirmation attempt(s) {blocked} stopped on an A2 violation, or have no "
+                "valid record: they cannot justify a second confirmation (D18, P1-21)"
+            )
+    return attempts
+
+
+# ---------------------------------------------------------------- completed results (I-2)
+
+
+def _field(data: Mapping[str, Any], dotted: str) -> Any:
+    value: Any = data
+    for key in dotted.split("."):
+        value = value.get(key) if isinstance(value, Mapping) else None
+    return value
+
+
+def _csv_rows(path: Path) -> tuple[list[str], int]:
+    with path.open(encoding="utf-8", newline="") as handle:
+        reader = csv.reader(handle)
+        header = next(reader, [])
+        return header, sum(1 for _ in reader)
+
+
+def verify_result(directory: Path, expected: Mapping[str, Any]) -> tuple[dict, list[Path]]:
+    """A published, completed result with the expected identity; returns it and its files.
+
+    Checks only the existence and integrity of the result, never the value of a criterion
+    (that is task T4b): status ``completed``, mode, block, iteration and values, every planned
+    episode written and present in ``episodes.csv``, and ``bootstrap_keys.csv``.
+    """
+    label = directory.as_posix()
+    provenance_path = directory / PROVENANCE_FILE
+    if not provenance_path.is_file():
+        raise P1RefusalError(f"{label} must be a published, completed result first (P1-18)")
+    data = _read_json(provenance_path)
+    if not isinstance(data, dict) or data.get("schema") != PROVENANCE_SCHEMA:
+        raise P1RefusalError(f"{label}: {PROVENANCE_FILE} is not a P1 provenance record")
+    if data.get("status") != "completed":
+        raise P1RefusalError(f"{label}: status {data.get('status')!r}, expected 'completed'")
+    for key, value in expected.items():
+        if _field(data, key) != value:
+            raise P1RefusalError(f"{label}: {key} is {_field(data, key)!r}, expected {value!r}")
+    planned, written = data.get("episodes_planned"), data.get("episodes_written")
+    if type(planned) is not int or planned < 1 or written != planned:
+        raise P1RefusalError(f"{label}: {written!r} of {planned!r} planned episodes written")
+    episodes, keys = directory / EPISODES_FILE, directory / BOOTSTRAP_FILE
+    for path in (episodes, keys):
+        if not path.is_file():
+            raise P1RefusalError(f"{label}: {path.name} is missing")
+    header, rows = _csv_rows(episodes)
+    if tuple(header) != EPISODE_COLUMNS or rows != written:
+        raise P1RefusalError(
+            f"{label}: {EPISODES_FILE} has {rows} rows (expected {written}) or wrong columns"
+        )
+    return data, [provenance_path, episodes, keys]
+
+
+def check_prerequisites(
+    mode: Mode, registry: Registry, output_root: Path
+) -> tuple[list[dict[str, Any]], list[Path]]:
+    """The completed results that must precede this mode, with their specification hashes."""
+    records: list[dict[str, Any]] = []
+    files: list[Path] = []
+
+    def need(directory: Path, expected: Mapping[str, Any]) -> dict:
+        data, paths = verify_result(directory, expected)
+        records.append(
+            {
+                "directory": directory.as_posix(),
+                "mode": data.get("mode"),
+                "values_iteration": data.get("values_iteration"),
+                "provenance_sha256": file_sha256(paths[0]),
+            }
+        )
+        files.extend(paths)
+        return data
+
+    calibration = output_root / CALIBRATION_BLOCK
+    last = mode.iteration - 1 if mode.name == "iteration" else mode.values_iteration
+    for number in range(1, last + 1):
+        need(
+            calibration / f"iteration_{number:03d}",
+            {
+                "mode": "iteration",
+                "block": CALIBRATION_BLOCK,
+                "iteration": number,
+                "values_iteration": number,
+                "values_source.sha256": registry.sha256(number),
+            },
+        )
+    if mode.name == "confirmation":
+        need(
+            calibration / ENTRY_LEAF,
+            {
+                "mode": "entry",
+                "block": CALIBRATION_BLOCK,
+                "values_iteration": last,
+                "values_source.sha256": registry.sha256(last),
+            },
+        )
+    elif mode.name == "second_confirmation":
+        first = need(
+            output_root / "confirmation" / CONFIRMATION_LEAF,
+            {"mode": "confirmation", "block": "confirmation"},
+        )
+        used = first.get("values_iteration")
+        if type(used) is not int or used >= last:
+            raise P1RefusalError(
+                f"the first confirmation used iteration {used!r}: a second confirmation follows "
+                f"a recalibration, so its values must come from a later iteration, not "
+                f"{last} (P1-21); it never repeats or replaces the first confirmation"
+            )
+        if _field(first, "values_source.sha256") != registry.sha256(used):
+            raise P1RefusalError(
+                f"the specification of iteration {used} changed after the first confirmation"
+            )
+    return records, files
+
+
+# ---------------------------------------------------------------- pre-flight
+
+
 @dataclass
 class Preflight:
     spec: P1Spec
@@ -215,14 +471,27 @@ class Preflight:
     tasks: tuple
     admissibility: Any
     project_seed: int
+    prerequisites: list[dict[str, Any]]
+    attempts: list[dict[str, Any]]
+    inputs: list[Path]
 
 
 def preflight(
-    mode: Mode, spec_path: Path, config_dir: Path, author_authorized: bool, destination: Path
+    mode: Mode,
+    spec_path: Path,
+    config_dir: Path,
+    author_authorized: bool,
+    destination: Path,
+    output_root: Path,
 ) -> Preflight:
-    """Validations that need no result, in the order approved by the author (T3)."""
-    p0 = load_p0_spec(config_dir / "pilots" / "p0.yaml")
+    """Validations that need no result value, in the order approved by the author (T3, T3b)."""
+    p0_path = config_dir / "pilots" / "p0.yaml"
+    p0 = load_p0_spec(p0_path)
     spec = load_p1_spec(spec_path, {"exploratory": EXPLORATORY_SEED_GROUP, "P0": p0.seed_group})
+    try:
+        check_approved_seed_groups(spec)
+    except ValueError as error:
+        raise P1RefusalError(str(error)) from error
 
     registry = load_registry(spec_path)
     current = _registered(mode.source, registry)
@@ -241,6 +510,9 @@ def preflight(
         reference.world.n_predators,
     )
 
+    attempts = check_attempts(mode, destination, output_root)
+    prerequisites, result_files = check_prerequisites(mode, registry, output_root)
+
     candidate = {
         s: load_config(config_dir, s, scenario_overrides(mode.values, s)) for s in SCENARIOS
     }
@@ -253,7 +525,7 @@ def preflight(
         )
 
     tasks = plan_block(spec, mode.block, mode.values, scenarios=mode.scenarios)
-    check_block_groups(tasks, spec, mode.block)
+    check_block_plan(tasks, spec, mode.block, mode.values, mode.scenarios)
     configs = {}
     for task in tasks:
         key = (task.scenario, task.overrides)
@@ -269,7 +541,103 @@ def preflight(
         )
     if destination.exists():
         raise P1RefusalError(f"{destination} already exists; results are never overwritten")
-    return Preflight(spec, registry, configs, tasks, state_k, seeds.pop())
+
+    inputs = [
+        spec_path,
+        p0_path,
+        *(config_dir / name for name in (BASE_FILE, SCENARIOS_FILE, BASELINES_FILE)),
+        *(path for path, _ in registry.iterations),
+        *(path for path, _ in registry.rounds),
+        *result_files,
+    ]
+    return Preflight(
+        spec, registry, configs, tasks, state_k, seeds.pop(), prerequisites, attempts, inputs
+    )
+
+
+# ---------------------------------------------------------------- git checks (P1-19, T3b)
+
+
+def repository_checks(cwd: Path, inputs: Sequence[Path], output_root: Path) -> dict[str, Any]:
+    """What git says about the files read and the output root; never trusts the paths alone.
+
+    Combined with a clean working tree, "inside the repository and tracked" means that every
+    file read has exactly the content of the commit HEAD (P1-19).
+    """
+    root = git_toplevel(cwd)
+    if root is None:
+        return {
+            "root": None,
+            "outside_repository": [p.as_posix() for p in inputs],
+            "untracked": None,
+            "output_root_inside": False,
+            "head": None,
+            "upstream": None,
+            "upstream_commit": None,
+            "synchronized": False,
+        }
+    inside = [p for p in inputs if is_inside(p, root)]
+    untracked = git_untracked(inside, root)
+    state = git_state(root)
+    return {
+        "root": root.as_posix(),
+        "outside_repository": [p.as_posix() for p in inputs if p not in inside],
+        "untracked": None if untracked is None else [p.as_posix() for p in untracked],
+        "output_root_inside": is_inside(output_root, root),
+        "head": state["commit"],
+        "upstream": state["upstream"],
+        "upstream_commit": state["upstream_commit"],
+        "synchronized": state["commit"] is not None and state["commit"] == state["upstream_commit"],
+    }
+
+
+def refuse_on_git(base: Mapping[str, Any], checks: Mapping[str, Any]) -> None:
+    if base.get("git_dirty") is not False:
+        raise P1RefusalError(
+            f"the git working tree must be clean (P1-19); git_dirty = {base.get('git_dirty')!r}"
+        )
+    if checks["root"] is None:
+        raise P1RefusalError("the command must run inside the git repository (P1-19)")
+    if checks["outside_repository"]:
+        raise P1RefusalError(
+            f"files outside the repository: {checks['outside_repository']}; every specification "
+            "and configuration must be versioned (P1-19)"
+        )
+    if checks["untracked"] is None:
+        raise P1RefusalError("git could not list the tracked files (P1-19)")
+    if checks["untracked"]:
+        raise P1RefusalError(f"files not tracked by git: {checks['untracked']} (P1-19)")
+    if not checks["output_root_inside"]:
+        raise P1RefusalError("the output root must be inside the repository (P1-19)")
+    if checks["upstream"] is None:
+        raise P1RefusalError("HEAD has no upstream branch: push the specification first (P1-19)")
+    if not checks["synchronized"]:
+        raise P1RefusalError(
+            f"HEAD {checks['head']} is not synchronized with {checks['upstream']} "
+            f"({checks['upstream_commit']}): push the specification commit first (P1-19)"
+        )
+
+
+# ---------------------------------------------------------------- records
+
+
+def _sha_or_none(path: Path) -> str | None:
+    try:
+        return file_sha256(path)
+    except OSError:
+        return None
+
+
+def mode_summary(mode: Mode) -> dict[str, Any]:
+    return {
+        "name": mode.name,
+        "block": mode.block,
+        "stage": mode.stage,
+        "iteration": mode.iteration,
+        "values_iteration": mode.values_iteration,
+        "values_source": {"path": mode.source.as_posix(), "sha256": _sha_or_none(mode.source)},
+        "values": dataclasses.asdict(mode.values),
+    }
 
 
 def provenance_document(
@@ -288,6 +656,7 @@ def provenance_document(
         "block": mode.block,
         "stage": mode.stage,
         "iteration": mode.iteration,
+        "values_iteration": mode.values_iteration,
         "bootstrap_run": mode.run,
         "scenarios": list(mode.scenarios),
         "episodes_per_condition": plan.spec.blocks.named()[mode.block].episodes,
@@ -303,6 +672,9 @@ def provenance_document(
         "registered_rounds": [
             {"path": p.as_posix(), "sha256": file_sha256(p)} for p, _ in plan.registry.rounds
         ],
+        "prerequisites": plan.prerequisites,
+        "previous_attempts": plan.attempts,
+        "git_checks": None,
         "uv_lock_sha256": file_sha256(uv_lock) if uv_lock.exists() else None,
         "dependencies": dependency_versions(DEPENDENCIES),
         "state_k": {
@@ -332,6 +704,7 @@ def provenance_document(
         "finished_utc": None,
         "duration_seconds": None,
         "episodes_written": None,
+        "episodes_discarded": None,
     }
 
 
@@ -340,7 +713,12 @@ def _now() -> dt.datetime:
 
 
 def failure_document(
-    error: BaseException, phase: str, destination: Path, completed: int
+    error: BaseException,
+    phase: str,
+    destination: Path,
+    completed: int,
+    mode: Mode,
+    partial: Path | None,
 ) -> dict[str, Any]:
     a2 = None
     if isinstance(error, A2ViolationError):
@@ -364,11 +742,26 @@ def failure_document(
         "phase": phase,
         "destination": destination.as_posix(),
         "command": list(sys.argv),
+        "git": git_state(Path.cwd()),
+        "mode": mode_summary(mode),
+        "previous_attempts": list_attempts(destination, exclude=partial),
         "error_type": f"{type(error).__module__}.{type(error).__qualname__}",
         "message": str(error),
         "notes": list(getattr(error, "__notes__", [])),
         "episodes_completed": completed,
         "a2_violation": a2,
+    }
+
+
+def failed_provenance(provenance: Mapping[str, Any], discarded: int) -> dict[str, Any]:
+    """The provenance of a failed block: nothing was published, every episode was discarded."""
+    return {
+        **provenance,
+        "status": "failed",
+        "finished_utc": None,
+        "duration_seconds": None,
+        "episodes_written": None,
+        "episodes_discarded": discarded,
     }
 
 
@@ -386,9 +779,15 @@ def record_failure(
     else:
         directory = reserve_failure_directory(destination, _now())
     if provenance is not None:
-        replace_json(directory / PROVENANCE_FILE, {**provenance, "status": "failed"})
+        replace_json(
+            directory / PROVENANCE_FILE,
+            failed_provenance(provenance, failure["episodes_completed"]),
+        )
     replace_json(directory / FAILURE_FILE, failure)
     return directory
+
+
+# ---------------------------------------------------------------- command
 
 
 def pilot_p1(
@@ -437,16 +836,15 @@ def pilot_p1(
     destination = mode.destination(output_root)
     phase, partial, provenance, completed = "preflight", None, None, 0
     try:
-        plan = preflight(mode, spec_path, config_dir, author_authorized, destination)
+        plan = preflight(mode, spec_path, config_dir, author_authorized, destination, output_root)
         # Provenance is captured BEFORE anything is written (P1-19): git_dirty describes the
         # code that runs, not the files this command is about to create.
         first_hash = next(iter(plan.configs.values())).config_hash  # every hash is listed too
         base = collect_provenance(sys.argv, Path.cwd(), first_hash)
         provenance = provenance_document(mode, plan, base, spec_path, author_authorized)
-        if base.get("git_dirty") is not False:
-            raise P1RefusalError(
-                f"the git working tree must be clean (P1-19); git_dirty = {base.get('git_dirty')!r}"
-            )
+        checks = repository_checks(Path.cwd(), plan.inputs, output_root)
+        provenance["git_checks"] = checks
+        refuse_on_git(base, checks)
 
         phase = "execution"
         started = time.perf_counter()
@@ -487,26 +885,36 @@ def pilot_p1(
             "finished_utc": _now().isoformat(timespec="seconds"),
             "duration_seconds": round(time.perf_counter() - started, 3),
             "episodes_written": len(rows),
+            "episodes_discarded": 0,
         }
         replace_json(partial / PROVENANCE_FILE, provenance)
         publish_directory(partial, destination)
     except A2ViolationError as error:
         directory = record_failure(
-            destination, partial, provenance, failure_document(error, phase, destination, completed)
+            destination,
+            partial,
+            provenance,
+            failure_document(error, phase, destination, completed, mode, partial),
         )
         typer.echo(f"A2 violation, block stopped: {error}", err=True)
         typer.echo(f"failure recorded in {directory}", err=True)
         raise typer.Exit(code=EXIT_A2_VIOLATION) from error
     except Exception as error:
         directory = record_failure(
-            destination, partial, provenance, failure_document(error, phase, destination, completed)
+            destination,
+            partial,
+            provenance,
+            failure_document(error, phase, destination, completed, mode, partial),
         )
         typer.echo(f"error ({phase}): {error}", err=True)
         typer.echo(f"failure recorded in {directory}", err=True)
         raise typer.Exit(code=EXIT_FAILURE) from error
     except KeyboardInterrupt as error:
         record_failure(
-            destination, partial, provenance, failure_document(error, phase, destination, completed)
+            destination,
+            partial,
+            provenance,
+            failure_document(error, phase, destination, completed, mode, partial),
         )
         raise
 

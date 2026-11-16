@@ -21,6 +21,9 @@ Result rows (F4 T3), pure computations used by the ``pilot p1`` command:
 - one ``episodes.csv`` row per episode (P1-13, P1-16) and the ``bootstrap_keys.csv`` rows
   (P1-20). Columns and types are documented in ``docs/p1_data_dictionary.md``.
 
+Protections (F4 T3b): the approved seed groups and sizes of P1-13 and P1-5 whenever a real group
+is declared, and the exact plan of a block.
+
 Checks that depend on results (S_A met, "unsuccessful" iterations in D9, alternations caused by a
 failed re-evaluation) belong to the calibration sequence verifier (task T4b). The criteria are
 evaluated by ``analysis`` (task T4). File writing and provenance belong to the command.
@@ -1117,6 +1120,79 @@ COMPARISON_SCENARIOS: Mapping[Comparison, tuple[str, ...]] = {
 }
 KEY_FIELDS = ("purpose", "seed_group", "run", "generation", "item", "stream")
 BOOTSTRAP_COLUMNS = ("comparison", "comparison_name", "project_seed", *KEY_FIELDS)
+
+
+# ---------------------------------------------------------------- protections (F4 T3b)
+
+# The approved P1 blocks (ADR-033 P1-13 seed groups, P1-5 episodes per condition and scenario).
+APPROVED_BLOCKS: Mapping[str, tuple[int, tuple[int, int, int]]] = {
+    "calibration": (30, (10, 11, 12)),
+    "confirmation": (50, (20, 21, 22)),
+    "second_confirmation": (50, (30, 31, 32)),
+}
+REAL_SEED_GROUPS = range(10, 33)  # 10-32: only the approved table may declare them (D16)
+
+
+def check_approved_seed_groups(spec: P1Spec) -> None:
+    """A specification that declares any real P1 group must be exactly the approved one (T3b-1).
+
+    With a real group anywhere, every block must have the groups of P1-13 and the episodes of
+    P1-5, so no block can run the seeds of another (for instance, calibration on confirmation
+    seeds). Synthetic specifications (no group in 10-32) are not constrained by this check.
+    """
+    declared = spec.declared_seed_groups()
+    real = sorted(name for name, group in declared.items() if group in REAL_SEED_GROUPS)
+    if not real:
+        return
+    for name, block in spec.blocks.named().items():
+        episodes, groups = APPROVED_BLOCKS[name]
+        actual = (block.seed_groups.a, block.seed_groups.b, block.seed_groups.c)
+        if (block.episodes, actual) != (episodes, groups):
+            raise ValueError(
+                f"{real} declare real P1 seed groups (10-32), so every block must match ADR-033: "
+                f"block {name} needs {episodes} episodes and seed_groups {groups}, "
+                f"got {block.episodes} and {actual} (P1-5, P1-13, D16)"
+            )
+
+
+def check_block_plan(
+    tasks: Sequence[EpisodeTask],
+    spec: P1Spec,
+    block: str,
+    values: CandidateValues,
+    scenarios: Sequence[str],
+) -> None:
+    """The plan is exactly the expected one, in order, with the overrides of ``values`` (T3b).
+
+    Built independently of ``plan_block`` from the catalogue (P1-14) and the block
+    specification: every scenario of ``scenarios``, every condition of the scenario, every item.
+    ``check_block_groups`` runs first so that a foreign seed group gets its specific message.
+    """
+    if isinstance(scenarios, str) or not all(s in SCENARIOS for s in scenarios):
+        raise ValueError(f"scenarios must be a sequence of {SCENARIOS}, got {scenarios!r}")
+    check_block_groups(tasks, spec, block)
+    block_spec = spec.blocks.named()[block]
+    expected = [
+        (
+            block,
+            scenario,
+            entry,
+            block_spec.seed_groups.for_scenario(scenario),
+            item,
+            condition_overrides(values, scenario, entry.name),
+        )
+        for scenario in SCENARIOS
+        if scenario in scenarios
+        for entry in CONDITIONS_BY_SCENARIO[scenario]
+        for item in range(block_spec.episodes)
+    ]
+    actual = [(t.block, t.scenario, t.condition, t.seed_group, t.item, t.overrides) for t in tasks]
+    if actual == expected:
+        return
+    for index, (got, wanted) in enumerate(zip(actual, expected, strict=False)):
+        if got != wanted:
+            raise ValueError(f"task {index} of the plan is {got}, expected {wanted}")
+    raise ValueError(f"the plan has {len(actual)} tasks, expected {len(expected)}")
 
 
 def bootstrap_rows(
