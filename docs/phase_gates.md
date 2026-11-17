@@ -301,8 +301,11 @@ local, más que los ≈ 80 s estimados en ADR-032; no cambia ningún parámetro 
   correcto, 836 pruebas). T4c (rondas de ajuste de las reglas, A_rev e integración del
   verificador en `pilot p1`, D-T4c-1 a D-T4c-6) completada en C1–C3 (CI `43818450043` de
   `eaf128b`, correcto en Ubuntu y Windows, 885 pruebas). La auditoría de T4–T4c no encontró
-  hallazgos críticos; sus hallazgos importantes se resuelven en T4d (autorizada, en curso). T5 y
-  la ejecución de episodios reales de P1 no están autorizadas.
+  hallazgos críticos; sus hallazgos importantes se resolvieron en T4d (D-T4d-1 a D-T4d-5; CI
+  `44152672597` de `4d922ac`, correcto en Ubuntu y Windows, 949 pruebas). T5-0 (preparación
+  operativa, sin episodios) reservó `results/pilots/p1` con las huellas de referencia
+  ([p1_runbook.md](p1_runbook.md)). La ejecución de episodios reales de P1 (T5-1 en adelante)
+  requiere la autorización expresa del autor para cada paso.
 - **Criterio de cierre (ADR-024):** criterios de ADR-020 (clase A completa en la confirmación;
   cada B cumplido o aceptado mediante ADR; cada C investigado y documentado), `p_flee` y
   `u_cruise` ajustados y congelados (ADR-012) y etiqueta `env-frozen-v1`.
@@ -619,7 +622,8 @@ Los resultados se usan solo si pertenecen a su especificación registrada (SHA-2
 | T4c-C3 puerta de la secuencia en `pilot p1` (parte 2) | `eaf128b` | `43818450043` ✅ (885 pruebas en Ubuntu y en Windows) |
 | T4d-0 registros de T4c y decisiones de T4d | `830bb83` | Publicado con T4d-1/2 (`44150152983` ✅) |
 | T4d-1/2 STOP, huellas y decisiones del autor | `6681ba7` | `44150152983` ✅ (933 pruebas en Ubuntu y en Windows) |
-| T4d-3 raíz reservada, M-2 y prueba de extremo a extremo | commit que añade esta fila | CI de su publicación (resultado en el informe al autor) |
+| T4d-3 raíz reservada, M-2 y prueba de extremo a extremo | `4d922ac` | `44152672597` ✅ (949 pruebas en Ubuntu y en Windows) |
+| T5-0 reserva de `results/pilots/p1`, guía de operación y esqueleto de P1 en el informe | commit que añade esta fila | CI de su publicación |
 
 **Incidencias durante F4:**
 

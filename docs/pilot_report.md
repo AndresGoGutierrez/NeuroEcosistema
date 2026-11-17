@@ -118,3 +118,33 @@ hace divergir las trayectorias. El ahorro estimado era de unos 12 µs por paso.
 78 µs por paso en la referencia (53 µs para presa→planta, 50×40, y unos 12 µs para cada sentido
 de presa↔depredador) y unos 42 µs en 25/8. Es una estimación: no se espera que O1 baste por sí
 sola para que la referencia cumpla 500 µs. El efecto real se medirá con la metodología de O4.
+
+## P1: calibración ecológica (F4)
+
+### Pregunta y alcance
+
+¿Qué valores de los parámetros ecológicos ajustables y de las políticas por reglas cumplen los
+criterios de clase A de ADR-020 en los tres escenarios? La calibración sigue la máquina de estados
+de ADR-033 (P1-18): etapa A con rondas de ajuste de las reglas (P1-17), etapas B y C, evaluación
+de entrada y, con autorización expresa del autor, confirmación con semillas nuevas.
+
+### Método
+
+| Elemento | Valor |
+|---|---|
+| Especificación | `configs/pilots/p1.yaml`: calibración 30 episodios por condición (grupos 10/11/12), confirmación 50 (20/21/22) |
+| Condiciones | 35 por bloque (P1-14); escenario A con 12 condiciones |
+| Criterios | P1-16 desde los CSV (`pilot p1-criteria`); S_A, S_B y S_C de P1-18 |
+| Secuencia | Verificada antes de cada bloque por la puerta de `pilot p1` (D-T4c-5, T4d) |
+| Registro previo | Cada paso publicado (commit y push) antes de ejecutarse (P1-19) |
+| Procedimiento | [p1_runbook.md](p1_runbook.md) |
+| Valores provisionales (iteración 1) | `plant_energy` 30.0, `regrow_delay` 50, `n_plants` 40 (A, C) y 15 (B), `n_predators` 3 (A, B) y 8 (C), `p_flee` 0.3, `u_cruise` 0.5 (presa y depredador) |
+
+### Registro de pasos
+
+Cada paso real añade aquí una fila con su resultado y la decisión que siguió.
+
+| Paso | Especificación | Commit del registro | Commit de los resultados | S_X | Criterios B incumplidos | Veredicto de la secuencia | Decisión |
+|---|---|---|---|---|---|---|---|
+
+Todavía no se ha ejecutado ningún paso real.
