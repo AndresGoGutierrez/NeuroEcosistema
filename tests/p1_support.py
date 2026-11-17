@@ -64,6 +64,7 @@ def make_configs(root: Path, spec: dict | None = None) -> Path:
     configs = root / "configs"
     shutil.copytree(CONFIGS, configs)
     shutil.rmtree(configs / "pilots" / "p1", ignore_errors=True)  # never a real registry
+    shutil.rmtree(configs / "pilots" / "p1_decisions", ignore_errors=True)  # nor real decisions
     base = yaml.safe_load((configs / "base.yaml").read_text(encoding="utf-8"))
     base["world"]["t_max"] = 40
     for species in ("prey", "predator"):
