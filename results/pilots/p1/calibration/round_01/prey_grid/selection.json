@@ -1,0 +1,106 @@
+{
+  "objective": 277493,
+  "parameters": [
+    "prey_flee_threshold",
+    "prey_cruise_fraction"
+  ],
+  "phase": "prey",
+  "rule": "unique",
+  "schema": "neuroeco.p1-selection/1",
+  "tied": [
+    [
+      0.2,
+      0.3
+    ]
+  ],
+  "totals": [
+    {
+      "combination": [
+        0.2,
+        0.3
+      ],
+      "total": 277493
+    },
+    {
+      "combination": [
+        0.2,
+        0.5
+      ],
+      "total": 258074
+    },
+    {
+      "combination": [
+        0.2,
+        0.7
+      ],
+      "total": 253061
+    },
+    {
+      "combination": [
+        0.3,
+        0.3
+      ],
+      "total": 250491
+    },
+    {
+      "combination": [
+        0.3,
+        0.5
+      ],
+      "total": 238117
+    },
+    {
+      "combination": [
+        0.3,
+        0.7
+      ],
+      "total": 234870
+    },
+    {
+      "combination": [
+        0.4,
+        0.3
+      ],
+      "total": 214559
+    },
+    {
+      "combination": [
+        0.4,
+        0.5
+      ],
+      "total": 215907
+    },
+    {
+      "combination": [
+        0.4,
+        0.7
+      ],
+      "total": 210232
+    },
+    {
+      "combination": [
+        0.5,
+        0.3
+      ],
+      "total": 188135
+    },
+    {
+      "combination": [
+        0.5,
+        0.5
+      ],
+      "total": 185511
+    },
+    {
+      "combination": [
+        0.5,
+        0.7
+      ],
+      "total": 178343
+    }
+  ],
+  "winner": {
+    "prey_cruise_fraction": 0.3,
+    "prey_flee_threshold": 0.2
+  }
+}
