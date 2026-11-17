@@ -46,6 +46,7 @@ from neuroeco.analysis.calibration import (
     load_block,
     requirements_met,
 )
+from neuroeco.infrastructure.fingerprint import p1_fingerprint
 from neuroeco.infrastructure.provenance import (
     dependency_versions,
     file_sha256,
@@ -239,6 +240,8 @@ def pilot_p1_criteria(
             "python": sys.version.split()[0],
             "platform": platform.platform(),
             "dependencies": dependency_versions(DEPENDENCIES),
+            # T4d (D-T4d-2): the analysis code and the environment of this evaluation
+            "fingerprint": p1_fingerprint(Path.cwd() / "uv.lock"),
             "criteria_rows": len(results),
             "stage_requirements": {"stage": block.stage, "met": met},
         }

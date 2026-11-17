@@ -15,6 +15,7 @@ import yaml
 from typer.testing import CliRunner
 
 from neuroeco.application import calibration
+from neuroeco.infrastructure.provenance import file_sha256
 from neuroeco.presentation import pilot_p1, pilot_p1_criteria, pilot_p1_sequence
 from neuroeco.presentation.cli import app
 from p1_support import (
@@ -81,14 +82,14 @@ def criteria(monkeypatch, directory) -> None:
     assert result.exit_code == 0, result.output
 
 
-def refused_in_preflight(output, state, fragment: str) -> dict:
+def refused_in_preflight(output, state, fragment: str, reference: str = "D-T4c-5") -> dict:
     """The block was refused before any episode, the git checks and anything else were run."""
     assert_no_results(output)
     assert state["inputs"] is None  # the repository checks come later: never reached
     _, failure = only_failure(output)
     assert failure["phase"] == "preflight"
     assert failure["error_type"].endswith("P1RefusalError")
-    assert "D-T4c-5" in failure["message"] and fragment in failure["message"]
+    assert reference in failure["message"] and fragment in failure["message"]
     assert failure["episodes_completed"] == 0
     return failure
 
@@ -163,12 +164,37 @@ def test_the_command_has_no_option_to_skip_the_verification() -> None:
         "output_root",
         "round_spec",
         "round_phase",
-        "d9_confirmed",
     }
     # The predicate depends on the seed groups of the specification only.
     assert list(inspect.signature(calibration.sequence_gate_required).parameters) == ["spec"]
 
 
+def test_a_command_line_option_never_replaces_a_decision_of_the_author(setup) -> None:
+    """D-T4d-3: --d9-confirmed is gone; the option is a usage error and nothing is written."""
+    configs, output, _ = setup
+    result = invoke(
+        configs, output, "--iteration", str(register(configs, 1, "A")), "--d9-confirmed", "1"
+    )
+    assert result.exit_code == 2 and "No such option" in result.output
+    assert not output.exists()
+
+
+def d9_decision(configs, number: int, iteration: int, spec_path) -> None:
+    path = configs / "pilots" / "p1_decisions" / f"{number:03d}.yaml"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    content = {
+        "schema": "neuroeco.p1-decision/1",
+        "decision": number,
+        "kind": "d9_e5",
+        "step": {"kind": "iteration", "number": iteration},
+        "plant_energy_needed": 1000.0,
+        "iteration_spec_sha256": file_sha256(spec_path),
+        "justification": "synthetic test decision",
+    }
+    path.write_text(yaml.safe_dump(content), encoding="utf-8")
+
+
+@pytest.mark.parametrize("decision", [False, True])
 @pytest.mark.parametrize(
     "groups",
     [
@@ -180,18 +206,23 @@ def test_the_command_has_no_option_to_skip_the_verification() -> None:
         },
     ],
 )
-def test_changing_the_specification_or_the_options_does_not_skip_it(
-    setup, monkeypatch, groups
+def test_changing_the_specification_or_adding_a_decision_does_not_skip_it(
+    setup, monkeypatch, groups, decision
 ) -> None:
-    """The D9 confirmation of the author is no way around it either (D-T4b-4)."""
+    """A decision of the author only confirms what it is bound to: here it opens nothing."""
     configs, output, state = setup
     real_spec(configs, groups)
     guard_episodes(monkeypatch)
     register(configs, 1, "A")
     second = register(configs, 2, "A", "plant_energy", plant_energy=35.0)
-    result = invoke(configs, output, "--iteration", str(second), "--d9-confirmed", "2")
+    if decision:
+        d9_decision(configs, 1, 2, second)
+    result = invoke(configs, output, "--iteration", str(second))
     assert result.exit_code == 1
-    refused_in_preflight(output, state, "not iteration 2")
+    if decision:
+        refused_in_preflight(output, state, "does not change n_plants_a", "D-T4d-3")
+    else:
+        refused_in_preflight(output, state, "not iteration 2")
 
 
 # ---------------------------------------------------------------- the verification itself

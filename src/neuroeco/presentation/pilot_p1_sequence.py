@@ -14,9 +14,11 @@ files). The outcomes then go through ``analysis.sequence`` (P1-18).
 
 from __future__ import annotations
 
+import csv
 import dataclasses
+import itertools
 import json
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -35,6 +37,7 @@ from neuroeco.analysis.calibration import (
 from neuroeco.analysis.sequence import (
     ENTRY,
     ITERATION,
+    N_PLANTS_A,
     ROUND,
     Outcome,
     RoundResult,
@@ -44,10 +47,27 @@ from neuroeco.analysis.sequence import (
     verify_sequence,
 )
 from neuroeco.application.calibration import GRID_PHASES, P1Spec, RoundSpec
-from neuroeco.infrastructure.config_loader import load_p1_spec
+from neuroeco.application.decisions import (
+    B_CRITERIA,
+    D9_E5,
+    ENTRY_REVIEW,
+    NEXT_STAGE,
+    REPEAT_STAGE,
+    AuthorDecision,
+    BCriteriaDecision,
+    D9E5Decision,
+    EntryReviewDecision,
+    cites_decision,
+)
+from neuroeco.domain.params import E5_MAX_FRACTION
+from neuroeco.domain.state import InitializationError
+from neuroeco.infrastructure.config_loader import load_config, load_p1_spec
+from neuroeco.infrastructure.decision_loader import load_decisions
+from neuroeco.infrastructure.fingerprint import p1_fingerprint
 from neuroeco.infrastructure.provenance import file_sha256
 from neuroeco.presentation.pilot_p1 import (
     CALIBRATION_BLOCK,
+    CONFIRMATION_LEAF,
     DEFAULT_OUTPUT_ROOT,
     DEFAULT_SPEC,
     ENTRY_LEAF,
@@ -61,6 +81,7 @@ from neuroeco.presentation.pilot_p1 import (
     published_winner,
     verify_result,
 )
+from neuroeco.presentation.pilot_p1 import _attempt as attempt_record
 from neuroeco.presentation.pilot_p1_criteria import (
     CRITERIA_FILE,
     CRITERIA_PROVENANCE_FILE,
@@ -297,7 +318,7 @@ def gate_report(
     if report.verdict is not Verdict.ALLOWED:
         hint = ""
         if report.verdict is Verdict.AUTHOR_CONFIRMATION:
-            hint = "; the E5 route of D9 needs --d9-confirmed, documented in the motive"
+            hint = "; the E5 route of D9 needs a d9_e5 decision of the author (D-T4d-3)"
         raise P1RefusalError(f"the sequence does not allow {found}{hint} {reference}")
     pending = report.pending
     if pending is None or (pending.kind, pending.number) != (kind, number):
@@ -313,21 +334,32 @@ def check_sequence_gate(
     registry: Registry,
     output_root: Path,
     p1_spec: P1Spec,
-    d9_confirmed: Sequence[int] = (),
+    decisions: Sequence[tuple[Path, AuthorDecision]],
+    prey_e_max: float,
+    fingerprint: Mapping[str, Any],
 ) -> tuple[dict[str, Any], list[Path]]:
     """Pre-flight of ``pilot p1`` (D-T4c-5): the record of the verification and the files read.
 
+    First the STOP conditions of T4d: an earlier attempt that stops P1 (D-T4d-1), and any
+    published block or criteria whose code or environment fingerprint is not ``fingerprint``
+    (D-T4d-2).
+
     The sequence is built from the published results exactly as ``pilot p1-sequence`` builds it
     (results of their registered specifications, criteria recomputed byte for byte); any result
-    that cannot be used, or a step that the sequence does not allow, refuses the block.
+    that cannot be used, or a step that the sequence does not allow, refuses the block. The
+    author decisions the steps need must exist and match what they judge (D-T4d-3).
     """
-    files: list[Path] = []
+    raise_on_stops(attempt_stops(output_root), "D-T4d-1")
+    files: list[Path] = [path for path, _ in decisions]
     try:
         steps = build_steps(registry, output_root, p1_spec, files)
     except (SequenceError, CriteriaError, ValueError) as error:
         raise P1RefusalError(f"sequence (D-T4c-5): {error}") from error
+    raise_on_stops(fingerprint_stops(files, fingerprint), "D-T4d-2")
     kind, number = gate_target(mode)
-    report = gate_report(steps, kind, number, d9_confirmed)
+    confirmed = d9_confirmations(decisions, registry, prey_e_max)
+    report = gate_report(steps, kind, number, sorted(confirmed))
+    used = check_author_decisions(steps, kind, number, decisions, output_root)
     record = {
         "applied": True,
         "step": _target_label(kind, number),
@@ -335,9 +367,277 @@ def check_sequence_gate(
         "reason": report.reason,
         "notes": list(report.notes),
         "transitions": [f"{t.source} -> {t.target}: {t.verdict}" for t in report.transitions],
-        "d9_confirmed": sorted(set(d9_confirmed)),
+        "d9_confirmed": sorted(confirmed),
+        "decisions": used,
+        "blocks_fingerprinted": len(published_directories(files)),
     }
     return record, files
+
+
+# ---------------------------------------------------------------- author decisions (T4d, D-T4d-3)
+
+DECISION_REFERENCE = "(P1-18, D-T4d-3)"
+
+
+def _refuse(message: str) -> P1RefusalError:
+    return P1RefusalError(f"{message} {DECISION_REFERENCE}")
+
+
+def d9_confirmations(
+    decisions: Sequence[tuple[Path, AuthorDecision]], registry: Registry, prey_e_max: float
+) -> set[int]:
+    """Stage-A iterations whose change of n_plants a valid d9_e5 decision confirms (D9).
+
+    The decision is bound to the registered specification by its SHA-256, that specification
+    changes ``n_plants_a`` and its motive cites the decision, and the ``plant_energy`` the
+    author states as needed really violates E5 with the prey of the configuration.
+    """
+    specs = {spec.iteration: (path, spec) for path, spec in registry.iterations}
+    confirmed: set[int] = set()
+    for _, decision in decisions:
+        if not isinstance(decision, D9E5Decision):
+            continue
+        name, number = f"decision {decision.decision}", decision.step.number
+        if number not in specs:
+            raise _refuse(f"{name}: iteration {number} is not registered")
+        path, spec = specs[number]
+        if file_sha256(path) != decision.iteration_spec_sha256:
+            raise _refuse(f"{name} is not bound to the registered specification {path.name}")
+        if spec.changed_parameter != N_PLANTS_A:
+            raise _refuse(f"{name}: iteration {number} does not change {N_PLANTS_A}")
+        if decision.plant_energy_needed / prey_e_max <= E5_MAX_FRACTION:
+            raise _refuse(
+                f"{name}: plant_energy {decision.plant_energy_needed} would not violate E5 "
+                f"(plant_energy / prey.e_max <= {E5_MAX_FRACTION}), so the E5 route of D9 does "
+                "not apply"
+            )
+        if not cites_decision(spec.motive, decision.decision):
+            raise _refuse(f"{name}: the motive of iteration {number} must cite it")
+        confirmed.add(number)
+    return confirmed
+
+
+def step_directory(output_root: Path, key: tuple[str, int]) -> Path:
+    kind, number = key
+    if kind == ITERATION:
+        return output_root / CALIBRATION_BLOCK / f"iteration_{number:03d}"
+    if kind == ENTRY:
+        return output_root / CALIBRATION_BLOCK / ENTRY_LEAF
+    return output_root / CONFIRMATION / CONFIRMATION_LEAF
+
+
+def _row_key(row: Mapping[str, str]) -> str:
+    part = row["part"]
+    return f"{row['criterion']}{'/' + part if part else ''}@{row['scenario']}"
+
+
+def _criteria_rows(directory: Path) -> list[dict[str, str]]:
+    with (directory / CRITERIA_FILE).open(encoding="utf-8", newline="") as handle:
+        return list(csv.DictReader(handle))
+
+
+def _steps_up_to(steps: Sequence[Step], kind: str, number: int) -> list[Step]:
+    upto = list(steps)
+    if kind == ENTRY and not (upto and upto[-1].kind == ENTRY):
+        upto.append(Step(ENTRY, 0))
+    if kind == CONFIRMATION:
+        return upto
+    for index, step in enumerate(upto):
+        if (step.kind, step.number) == (kind, number):
+            return upto[: index + 1]
+    return upto
+
+
+def required_decisions(
+    steps: Sequence[Step], kind: str, number: int
+) -> dict[tuple[str, tuple[str, int]], tuple[Step, str]]:
+    """The decisions the transitions up to the step (kind, number) need: what each judges."""
+    upto = _steps_up_to(steps, kind, number)
+    needed: dict[tuple[str, tuple[str, int]], tuple[Step, str]] = {}
+    for previous, step in itertools.pairwise(upto):
+        outcome = previous.outcome
+        if (
+            previous.kind == ITERATION
+            and previous.stage in ("B", "C")
+            and outcome is not None
+            and outcome.requirements_met
+            and outcome.failed_b
+        ):
+            same = step.kind == ITERATION and step.stage == previous.stage
+            needed[(B_CRITERIA, (step.kind, step.number))] = (
+                previous,
+                REPEAT_STAGE if same else NEXT_STAGE,
+            )
+    if kind == CONFIRMATION and upto and upto[-1].kind == ENTRY:
+        needed[(ENTRY_REVIEW, (CONFIRMATION, 0))] = (upto[-1], "")
+    return needed
+
+
+def _check_judged(
+    name: str, decision: BCriteriaDecision | EntryReviewDecision, directory: Path, root: Path
+) -> list[dict[str, str]]:
+    expected = (
+        directory.relative_to(root).as_posix(),
+        file_sha256(directory / PROVENANCE_FILE),
+        file_sha256(directory / CRITERIA_FILE),
+    )
+    judged = decision.judges
+    if (judged.directory, judged.provenance_sha256, judged.criteria_sha256) != expected:
+        raise _refuse(f"{name} does not judge {expected[0]} with its current files (SHA-256)")
+    return _criteria_rows(directory)
+
+
+def check_author_decisions(
+    steps: Sequence[Step],
+    kind: str,
+    number: int,
+    decisions: Sequence[tuple[Path, AuthorDecision]],
+    output_root: Path,
+) -> list[dict[str, Any]]:
+    """Every decision the steps up to (kind, number) need exists, matches and is unchanged.
+
+    One decision per kind and step; each authorizes a step that is reached and that needs it
+    (a d9_e5 decision is checked by ``d9_confirmations``); a step already run must have
+    recorded the SHA-256 of its decisions in its provenance, so a decision published or
+    modified afterwards is a STOP. Returns the decisions of the step about to run.
+    """
+    by_key: dict[tuple[str, tuple[str, int]], tuple[Path, AuthorDecision]] = {}
+    for path, decision in decisions:
+        key = (decision.kind, decision.step.key)
+        if key in by_key:
+            raise _refuse(f"two {decision.kind} decisions for {decision.step.key}")
+        by_key[key] = (path, decision)
+    upto = _steps_up_to(steps, kind, number)
+    reached = {(s.kind, s.number) for s in upto}
+    if kind == CONFIRMATION:
+        reached.add((CONFIRMATION, 0))
+    needed = required_decisions(steps, kind, number)
+    for (decision_kind, step_key), (_, decision) in by_key.items():
+        name = f"decision {decision.decision}"
+        if step_key not in reached:
+            raise _refuse(f"{name} authorizes {step_key}, a step the sequence has not reached")
+        if decision_kind != D9_E5 and (decision_kind, step_key) not in needed:
+            raise _refuse(f"{name} authorizes nothing: {step_key} needs no {decision_kind}")
+
+    for (decision_kind, step_key), (judged_step, choice) in needed.items():
+        if (decision_kind, step_key) not in by_key:
+            raise _refuse(
+                f"{step_key} needs a {decision_kind} decision of the author on {judged_step.label}"
+            )
+        _, decision = by_key[(decision_kind, step_key)]
+        assert isinstance(decision, BCriteriaDecision | EntryReviewDecision)
+        name = f"decision {decision.decision}"
+        directory = step_directory(output_root, (judged_step.kind, judged_step.number))
+        rows = _check_judged(name, decision, directory, output_root)
+        statuses = {_row_key(row): row["status"] for row in rows}
+        if isinstance(decision, BCriteriaDecision):
+            if decision.choice != choice:
+                raise _refuse(f"{name}: choice {decision.choice!r}, the step is {choice!r}")
+            assert judged_step.outcome is not None
+            expected = set(judged_step.outcome.failed_b)
+        else:
+            expected = {_row_key(row) for row in rows if row["class"] in ("B", "C")}
+        keys = [item.key for item in decision.items]
+        if len(keys) != len(set(keys)) or set(keys) != expected:
+            raise _refuse(f"{name} must decide exactly on {sorted(expected)}, not {keys}")
+        wrong = [item.key for item in decision.items if item.status != statuses[item.key]]
+        if wrong:
+            raise _refuse(f"{name}: the results of {wrong} are not those of criteria.csv")
+
+    target = (kind, number)
+    used = []
+    for (_, step_key), (path, decision) in sorted(by_key.items(), key=lambda i: i[1][1].decision):
+        entry = {"decision": decision.decision, "sha256": file_sha256(path)}
+        if step_key == target:
+            used.append(entry)
+            continue
+        provenance = step_directory(output_root, step_key) / PROVENANCE_FILE
+        if provenance.is_file():
+            record = _json(provenance)
+            gate = record.get("sequence_gate") if isinstance(record, dict) else None
+            if not isinstance(gate, dict) or entry not in (gate.get("decisions") or []):
+                raise P1RefusalError(
+                    f"{STOP_REFERENCE} (D-T4d-3): decision {decision.decision} was published or "
+                    f"modified after {step_key} ran"
+                )
+    return used
+
+
+# ---------------------------------------------------------------- STOP (T4d, D-T4d-1, D-T4d-2)
+
+P1_BLOCKS = (CALIBRATION_BLOCK, "confirmation", "second_confirmation")
+INITIALIZATION_ERROR = f"{InitializationError.__module__}.{InitializationError.__qualname__}"
+STOP_REFERENCE = "STOP (P1-18): consult the author; no step runs until an approved procedure"
+
+
+def attempt_stops(output_root: Path) -> list[str]:
+    """D-T4d-1: earlier attempts, anywhere in P1, that stop the calibration.
+
+    An A2 violation (in ``failure.json`` or in the failed provenance alone), an attempt whose
+    record cannot rule A2 out, an ``InitializationError`` and a partial directory that was not
+    recovered. An infrastructure failure (an interruption, a refused pre-flight) does not stop.
+    """
+    reasons: list[str] = []
+    for block in P1_BLOCKS:
+        base = output_root / block
+        if not base.is_dir():
+            continue
+        for path in sorted(p for p in base.rglob("*") if p.is_dir()):
+            partial = ".partial-" in path.name
+            if not (partial or ".failed-" in path.name):
+                continue
+            label = path.relative_to(output_root).as_posix()
+            record = attempt_record(path)
+            if record["a2_violation"] is True:
+                reasons.append(f"{label}: an A2 violation (P1-22)")
+            elif partial:
+                reasons.append(f"{label}: a partial directory; recover it as documented first")
+            elif record["a2_violation"] is None:
+                reasons.append(f"{label}: no recognizable failure record, A2 cannot be ruled out")
+            elif record.get("error_type") == INITIALIZATION_ERROR:
+                reasons.append(f"{label}: an InitializationError (the configuration is rejected)")
+    return reasons
+
+
+def published_directories(files: Sequence[Path]) -> list[Path]:
+    """The published blocks among the files the sequence read (their ``provenance.json``)."""
+    return sorted({path.parent for path in files if path.name == PROVENANCE_FILE})
+
+
+def _differences(recorded: Any, current: Mapping[str, Any]) -> list[str]:
+    if not isinstance(recorded, Mapping):
+        return ["no fingerprint"]
+    found = []
+    for part, values in current.items():
+        other = recorded.get(part)
+        names = values.keys() if isinstance(values, Mapping) else ()
+        found.extend(
+            f"{part}.{name}"
+            for name in names
+            if not isinstance(other, Mapping) or other.get(name) != values[name]
+        )
+    return found
+
+
+def fingerprint_stops(files: Sequence[Path], current: Mapping[str, Any]) -> list[str]:
+    """D-T4d-2: every published block, and its criteria, come from this code and environment."""
+    reasons = []
+    for directory in published_directories(files):
+        for name in (PROVENANCE_FILE, CRITERIA_PROVENANCE_FILE):
+            path = directory / name
+            if not path.is_file():
+                continue  # a grid has no criteria
+            record = _json(path)
+            recorded = record.get("fingerprint") if isinstance(record, dict) else None
+            different = _differences(recorded, current)
+            if different:
+                reasons.append(f"{path.as_posix()}: {different} differ from the running ones")
+    return reasons
+
+
+def raise_on_stops(reasons: Sequence[str], cause: str) -> None:
+    if reasons:
+        raise P1RefusalError(f"{STOP_REFERENCE} ({cause}): {list(reasons)}")
 
 
 def _print(report: SequenceReport) -> None:
@@ -355,21 +655,29 @@ def pilot_p1_sequence(
     output_root: Annotated[
         Path, typer.Option(help="Root of the P1 results.")
     ] = DEFAULT_OUTPUT_ROOT,
-    d9_confirmed: Annotated[
-        list[int] | None,
-        typer.Option(
-            help="Stage-A iteration whose n_plants change the author confirmed through the E5 "
-            "route of D9 (documented in its motive); repeatable.",
-        ),
-    ] = None,
 ) -> None:
-    """Verify the P1 calibration sequence against the published results (P1-18)."""
+    """Verify the P1 calibration sequence against the published results (P1-18).
+
+    The E5 route of D9 is confirmed only by d9_e5 decisions of the author (D-T4d-3), read from
+    ``p1_decisions/`` next to the specification; the configuration is ``configs/`` above it.
+    """
+    files: list[Path] = []
     try:
-        steps = build_steps(load_registry(spec), output_root, load_p1_spec(spec, {}))
+        stops = attempt_stops(output_root)
+        registry = load_registry(spec)
+        steps = build_steps(registry, output_root, load_p1_spec(spec, {}), files)
+        prey_e_max = load_config(spec.parent.parent, "A").world.prey.e_max
+        d9_confirmed = d9_confirmations(load_decisions(spec), registry, prey_e_max)
     except (SequenceError, CriteriaError, P1RefusalError, ValueError) as error:
         typer.echo(f"refused: {error}", err=True)
         raise typer.Exit(code=EXIT_NOT_ALLOWED) from error
-    report = verify_sequence(steps, d9_confirmed=d9_confirmed or ())
+    stops += fingerprint_stops(files, p1_fingerprint(Path.cwd() / "uv.lock"))
+    if stops:  # D-T4d-1 and D-T4d-2: the same STOP as the gate of pilot p1
+        typer.echo(f"next: -: {Verdict.STOP} ({STOP_REFERENCE})")
+        for reason in stops:
+            typer.echo(f"  stop: {reason}")
+        raise typer.Exit(code=EXIT_NOT_ALLOWED)
+    report = verify_sequence(steps, d9_confirmed=sorted(d9_confirmed))
     _print(report)
     if report.verdict is not Verdict.ALLOWED:
         raise typer.Exit(code=EXIT_NOT_ALLOWED)

@@ -131,6 +131,7 @@ resuelta), `finished_utc`, `duration_seconds`, `episodes_written`, `episodes_dis
 | `input_files` (T3c) | Ruta y SHA-256 de cada archivo leído: configuración, especificaciones registradas y archivos de los resultados exigidos |
 | `prerequisites` | Resultados completos exigidos antes de este bloque: directorio, modo, `values_iteration` y SHA-256 de su `provenance.json` |
 | `previous_attempts` | Intentos anteriores en el mismo destino: directorio y `kind` (`failure`, `interrupted`, `unrecognized`, o `partial` para un directorio parcial sin recuperar), con fase, tipo de error, fecha y `a2_violation` (verdadero, falso o `null` si no se puede saber) |
+| `fingerprint` (T4d) | Huellas SHA-256 del código (`code.simulation`: el paquete sin `analysis`; `code.analysis`) con los finales de línea normalizados, y del entorno (`environment`: Python, implementación, `sys.platform`, sistema operativo con su versión, arquitectura, orden de bytes, versiones de las dependencias, SHA-256 de `uv.lock`, variables de hilos de ADR-016 y capacidades de CPU que usa numpy). No incluye nombre del equipo, usuario ni rutas. `criteria_provenance.json` registra la misma huella al evaluar |
 | `sequence_gate` (T4c) | Verificación de la secuencia de P1-18 antes del bloque (D-T4c-5): `applied`; si se aplicó, `step` (el paso que se ejecuta), `verdict` (`allowed`, o `author_authorization_required` en una confirmación), `reason`, `notes`, `transitions` (cada transición verificada) y `d9_confirmed`; si no se aplicó, `reason` (especificación sintética) |
 | `git_checks` | `root`; `outside_repository` y `untracked` (archivos leídos fuera del repositorio o sin versionar); `hidden_changes` (marcas assume-unchanged o skip-worktree); `content_overrides` (filtros `clean`/`process` configurados o referencias `refs/replace/`); `head_mismatches` (archivos versionados cuyo contenido difiere de HEAD); `package_inside`; `canonical_paths`; `output_root_inside`; `ignored_outputs`; `head`, `upstream`, `upstream_full_ref`, `remote`, `remote_url` (sin credenciales), `upstream_commit` y `synchronized` |
 | `episodes_written` | Episodios publicados: solo con `status` = `completed`; `null` en un fallo |
@@ -218,8 +219,14 @@ que con los grupos reales se ejecuta antes.
 
 ## Intentos anteriores y repeticiones (D18)
 
-- Un intento fallido nunca impide repetir una iteración o una evaluación de entrada; queda en
-  `previous_attempts`.
+- Un fallo de infraestructura (una interrupción, una comprobación previa rechazada) nunca impide
+  repetir una iteración, una fase de una ronda o una evaluación de entrada; queda en
+  `previous_attempts`. **Precisión de T4d (D-T4d-1, autorizada por el autor):** con una
+  especificación no sintética, una violación A2, una `InitializationError`, un intento sin
+  registro reconocible o un directorio parcial sin recuperar, **en cualquier destino de P1**,
+  producen STOP: la puerta de la secuencia rechaza cualquier paso, incluido repetir el mismo,
+  mientras no exista un procedimiento de recuperación aprobado. Las especificaciones sintéticas
+  de las pruebas conservan el comportamiento de T3c.
 - **Confirmaciones.** Se repiten con las mismas semillas solo tras un fallo de infraestructura.
   Se rechaza la ejecución si algún intento anterior en el mismo destino fue una violación A2 o
   no tiene un registro reconocible (no se puede descartar A2).
@@ -369,8 +376,8 @@ P1-18).
 
 ## Verificación de la secuencia: `neuroeco pilot p1-sequence` (T4b, T4c)
 
-`neuroeco pilot p1-sequence [--spec configs/pilots/p1.yaml] [--output-root results/pilots/p1]
-[--d9-confirmed N ...]` es de solo lectura: no ejecuta episodios ni escribe archivos. El autor
+`neuroeco pilot p1-sequence [--spec configs/pilots/p1.yaml] [--output-root results/pilots/p1]`
+es de solo lectura: no ejecuta episodios ni escribe archivos. El autor
 lo ejecuta antes de autorizar cada iteración (D-T4b-1); desde T4c, `pilot p1` aplica la misma
 verificación en sus comprobaciones previas (ver la sección siguiente).
 
@@ -403,9 +410,8 @@ la vía E5 de D9) y `author_authorization_required` (la entrada cumplió la clas
 confirmación necesita la autorización expresa, D11). El veredicto `not_verifiable_until_T4c` de
 T4b (D-T4b-2) ya no existe: T4c verifica lo que sigue a una ronda. El código de salida es 0 solo
 con `allowed`. Las notas del informe señalan las transiciones que requieren una decisión
-documentada del autor (D-T4b-3); no son comprobaciones automáticas. `--d9-confirmed N` registra
-que el autor confirmó la vía E5 para la iteración N, y esa confirmación debe constar en su
-motivo (P1-19).
+documentada del autor (D-T4b-3). La vía E5 de D9 solo la confirma una decisión `d9_e5` del
+autor (T4d, ver "Decisiones del autor"); la opción `--d9-confirmed` de T4b ya no existe.
 
 ## Puerta de la secuencia en `pilot p1` (T4c, D-T4c-5)
 
@@ -428,19 +434,50 @@ cualquier otra comprobación de resultados, `pilot p1` construye los pasos exact
   Como cada episodio toma su grupo de esas declaraciones y el plan se comprueba de forma
   independiente, ningún episodio con un grupo menor que 1000 puede ejecutarse sin la
   verificación. Con un grupo real, además, la tabla completa debe ser la aprobada (T3b-1).
-- **Sin opción para saltarla.** No existe ninguna opción que la desactive. `--d9-confirmed N`
-  (la misma confirmación de D-T4b-4 que en `pilot p1-sequence`, documentada en el motivo de la
-  iteración) solo permite la vía E5 de D9 para la iteración N; no omite ninguna otra regla y
-  debe repetirse en cada ejecución posterior mientras esa transición forme parte de la
-  secuencia, porque la secuencia se verifica completa cada vez.
+- **Sin opción para saltarla.** No existe ninguna opción que la desactive. Los juicios que
+  P1-18 deja al autor solo se aceptan como decisiones registradas y verificadas (ver la sección
+  siguiente); ninguna opción de línea de comandos las sustituye.
+- **STOP (T4d).** Antes de construir la secuencia, la puerta revisa todos los intentos bajo
+  `calibration/`, `confirmation/` y `second_confirmation/`: una violación A2, un intento sin
+  registro reconocible, una `InitializationError` o un directorio parcial producen STOP
+  (D-T4d-1). Después compara la huella de cada bloque publicado y de sus criterios con la del
+  código y el entorno que se ejecutan: cualquier diferencia es STOP (D-T4d-2). Un cambio del
+  código de análisis tras la primera iteración también es STOP mientras el procedimiento de
+  reevaluación de P1-19 esté aplazado. `pilot p1-sequence` informa los mismos STOP
+  (`next: -: stop`). Ninguna opción ni decisión levanta un STOP.
 - **Rechazo.** Un resultado que no se puede usar (sin `criteria.csv`, criterios que no
   coinciden, resultado ajeno a su especificación) o un paso no permitido se rechazan en la fase
   `preflight`, antes de capturar la procedencia y de ejecutar ningún episodio, con
-  `P1RefusalError` y un `failure.json` cuyo mensaje cita D-T4c-5.
+  `P1RefusalError` y un `failure.json` cuyo mensaje cita la regla aplicada (D-T4c-5, o D-T4d-1
+  a D-T4d-3).
 - **Archivos leídos.** La procedencia, los CSV y los dos archivos de criterios de cada bloque
   usado, y las rejillas, se añaden a `input_files`, de modo que deben estar versionados e iguales
   a HEAD (P1-19).
 - **Flujo de cada paso:** `pilot p1` → `pilot p1-criteria` → commit y push → siguiente paso.
+
+## Decisiones del autor: `configs/pilots/p1_decisions/NNN.yaml` (T4d, D-T4d-3)
+
+P1-18 deja tres juicios al autor. Cada uno se registra **antes** de ejecutar el paso que
+autoriza, en un archivo versionado con el esquema estricto `neuroeco.p1-decision/1` (claves
+desconocidas o ausentes, tipos incorrectos, un nombre de archivo distinto del número o un hueco
+en la numeración se rechazan). Campos comunes: `schema`, `decision` (número), `kind`, `step`
+(`kind` y `number` del paso que autoriza) y `justification`.
+
+| `kind` | Cuándo hace falta | Campos propios | Qué comprueba la puerta |
+|---|---|---|---|
+| `b_criteria` | Pasar de una iteración B o C con S_X cumplido y criterios B incumplidos a la siguiente iteración de la etapa o a la etapa siguiente (D-T4b-3) | `judges` (`directory`, `provenance_sha256`, `criteria_sha256` del bloque juzgado), `choice` (`repeat_stage` o `next_stage`), `items` | `judges` igual a los archivos actuales; `choice` igual al paso; `items` exactamente los B incumplidos, cada uno con su `status` de `criteria.csv` |
+| `entry_review` | La confirmación (estado E: "cada B y C tiene resultado y decisión") | `judges` (la evaluación de entrada), `items` | `items` exactamente **todas** las filas B y C de `criteria.csv` de la entrada, con su `status` |
+| `d9_e5` | Un cambio de `n_plants_a` sin la premisa de D9 (vía E5) | `plant_energy_needed`, `iteration_spec_sha256` | El SHA-256 es el de `NNN.yaml` registrado; esa iteración cambia `n_plants_a`; su motivo cita "decisión N"; y `plant_energy_needed / prey.e_max > 0.5`, es decir, viola E5 de verdad |
+
+Cada `items` tiene `criterion`, `part`, `scenario`, `status`, `decision` y `justification`.
+
+- **Una decisión por tipo y paso**, y solo para un paso al que la secuencia ha llegado y que la
+  necesita: no se puede preparar una decisión para un paso futuro ni reutilizarla en otro.
+- **Inmutable.** La procedencia del paso registra el número y el SHA-256 de sus decisiones
+  (`sequence_gate.decisions`). Si después se modifica o se publica una decisión para un paso ya
+  ejecutado, la puerta da STOP.
+- Los archivos de decisión se añaden a `input_files`: deben estar versionados e iguales a HEAD.
+- `pilot p1-sequence` usa las decisiones `d9_e5` para verificar la vía E5 de D9.
 
 ## Historial del esquema
 
@@ -464,6 +501,9 @@ cualquier otra comprobación de resultados, `pilot p1` construye los pasos exact
   identificadores `/1` (D-T4c-6): los lectores existentes rechazan con un mensaje claro las
   etapas que no evalúan (por ejemplo, `pilot p1-criteria` sobre una rejilla). En C3 se añade
   `sequence_gate` a la procedencia (D-T4c-5), también aditivo.
+- **T4d:** campo añadido `fingerprint` en la procedencia y en `criteria_provenance.json`
+  (D-T4d-2), y `blocks_fingerprinted` y `decisions` en `sequence_gate`. Aditivos; se mantienen
+  los identificadores `/1`. Primera versión de `neuroeco.p1-decision/1`.
 - **Política (Mn-8):** cualquier cambio futuro incompatible (quitar o renombrar un campo, o
   cambiar su tipo o su significado) incrementará la versión del esquema (`/2`). Los lectores
   (T4) deben validar los campos que usan y no solo el identificador.

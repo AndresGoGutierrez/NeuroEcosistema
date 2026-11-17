@@ -172,7 +172,7 @@ def test_the_entry_and_the_confirmation_follow_the_sequence() -> None:
             ],
             ITERATION,
             3,
-            "--d9-confirmed",
+            "d9_e5 decision",
         ),
     ],
 )

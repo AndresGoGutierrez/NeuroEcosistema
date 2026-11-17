@@ -403,7 +403,8 @@ Implementación (C3):
   (`author_authorization_required`), además de `--author-authorized`. La segunda confirmación
   se rechaza siempre, porque P1-18 no tiene ese estado sin un flujo de recalibración aprobado
   (Mn-7, que ya la declaraba inalcanzable).
-- `pilot p1` acepta `--d9-confirmed N`: la misma confirmación de la vía E5 de D9 que D-T4b-4 ya
+- *(Sustituido en T4d por las decisiones de D-T4d-3; la opción ya no existe.)* `pilot p1`
+  aceptaba `--d9-confirmed N`: la misma confirmación de la vía E5 de D9 que D-T4b-4 ya
   aprobó para `pilot p1-sequence`. Sin ella la vía E5 sería inalcanzable en un experimento
   real. Solo afecta a esa regla y no omite ninguna otra comprobación.
 - D-T4b-1 queda cumplida: el verificador está integrado antes de T5. D-T4b-2 queda superada: lo
@@ -564,7 +565,7 @@ autor:
 | D-T4b-1 | Comando independiente; `pilot_p1.py` no cambia. **Antes de autorizar T5 es obligatorio integrar este verificador en las comprobaciones previas de `pilot p1`** |
 | D-T4b-2 | Se verifican todas las transiciones posibles con los datos actuales; tras una A con S_A cumplido y r < 3 se exige una ronda; lo que sigue a una ronda (sus resultados, A_rev, las alternancias que provoque y que las reglas cambien a los ganadores) se declara no verificable hasta T4c y nunca se acepta en silencio |
 | D-T4b-3 | Con S_B o S_C cumplido y algún criterio B incumplido se admiten otra iteración de la etapa (causa paramétrica) o la etapa siguiente (decisión documentada); el informe indica que es un juicio del autor, no una comprobación automática |
-| D-T4b-4 | D9: `n_plants` solo tras dos iteraciones A **consecutivas** infructuosas (S_A incumplido) que cambiaron `plant_energy` o `regrow_delay`; la vía E5 no se deduce y requiere la confirmación explícita y documentada del autor (`--d9-confirmed`) |
+| D-T4b-4 | D9: `n_plants` solo tras dos iteraciones A **consecutivas** infructuosas (S_A incumplido) que cambiaron `plant_energy` o `regrow_delay`; la vía E5 no se deduce y requiere la confirmación explícita y documentada del autor (`--d9-confirmed`; desde T4d, una decisión `d9_e5`, D-T4d-3) |
 
 Los resultados se usan solo si pertenecen a su especificación registrada (SHA-256 de
 `values_source`) y si su `criteria.csv` coincide byte a byte con los criterios recalculados.
