@@ -1,0 +1,56 @@
+{
+  "a2_violation": null,
+  "command": [
+    "C:\\Universidad Santoto\\Noveno Semestre\\ProyectosIA\\NEUROECOSISTEMA\\.venv\\Scripts\\neuroeco",
+    "pilot",
+    "p1",
+    "--iteration",
+    "configs/pilots/p1/iterations/001.yaml"
+  ],
+  "destination": "results/pilots/p1/calibration/iteration_001",
+  "episodes_completed": 0,
+  "error_type": "neuroeco.presentation.pilot_p1.P1RefusalError",
+  "git": {
+    "commit": "80e71b3e9b43ef7d031096d6ff7a6f0cd397aaee",
+    "dirty": false,
+    "remote_url": "https://github.com/AndresGoGutierrez/NeuroEcosistema.git",
+    "upstream": "origin/main",
+    "upstream_commit": "80e71b3e9b43ef7d031096d6ff7a6f0cd397aaee"
+  },
+  "message": "local git settings can disguise modified content as HEAD: ['filter: filter.lfs.clean', 'filter: filter.lfs.process'] (P1-19, T3c IA-1)",
+  "mode": {
+    "block": "calibration",
+    "iteration": 1,
+    "name": "iteration",
+    "stage": "A",
+    "values": {
+      "n_plants_a": 40,
+      "n_plants_b": 15,
+      "n_predators_c": 8,
+      "plant_energy": 30.0,
+      "predator_cruise_fraction": 0.5,
+      "prey_cruise_fraction": 0.5,
+      "prey_flee_threshold": 0.3,
+      "regrow_delay": 50
+    },
+    "values_iteration": 1,
+    "values_source": {
+      "path": "configs/pilots/p1/iterations/001.yaml",
+      "sha256": "39b160fe0b8224a797680bcf9b6bee099abd7d0563484d38817aca67e77930e4"
+    }
+  },
+  "notes": [],
+  "phase": "preflight",
+  "previous_attempts": [
+    {
+      "a2_violation": false,
+      "directory": "iteration_001.failed-20261117T193505Z-daf4fb6a",
+      "error_type": "neuroeco.presentation.pilot_p1.P1RefusalError",
+      "kind": "failure",
+      "phase": "preflight",
+      "timestamp_utc": "2026-11-17T19:35:05+00:00"
+    }
+  ],
+  "schema": "neuroeco.p1-failure/1",
+  "timestamp_utc": "2026-11-17T19:38:10+00:00"
+}
