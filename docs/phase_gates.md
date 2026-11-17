@@ -298,10 +298,11 @@ local, más que los ≈ 80 s estimados en ADR-032; no cambia ningún parámetro 
   completada y validada en las comprobaciones automáticas (CI `43807682418` de `85c42af`,
   correcto en Ubuntu y Windows, 802 pruebas), pendiente de la revisión del autor. T4b
   (verificador de la secuencia, D-T4b-1 a D-T4b-4) completada (CI `43810435648` de `42bce95`,
-  correcto), pendiente de la revisión del autor. T4c (rondas de ajuste de las reglas, A_rev e
-  integración del verificador en `pilot p1`, D-T4c-1 a D-T4c-6) autorizada e implementada en
-  los incrementos C1–C3, pendiente de su CI y de la revisión del autor. T5 y la ejecución de
-  episodios reales de P1 no están autorizadas.
+  correcto, 836 pruebas). T4c (rondas de ajuste de las reglas, A_rev e integración del
+  verificador en `pilot p1`, D-T4c-1 a D-T4c-6) completada en C1–C3 (CI `43818450043` de
+  `eaf128b`, correcto en Ubuntu y Windows, 885 pruebas). La auditoría de T4–T4c no encontró
+  hallazgos críticos; sus hallazgos importantes se resuelven en T4d (autorizada, en curso). T5 y
+  la ejecución de episodios reales de P1 no están autorizadas.
 - **Criterio de cierre (ADR-024):** criterios de ADR-020 (clase A completa en la confirmación;
   cada B cumplido o aceptado mediante ADR; cada C investigado y documentado), `p_flee` y
   `u_cruise` ajustados y congelados (ADR-012) y etiqueta `env-frozen-v1`.
@@ -407,6 +408,18 @@ Implementación (C3):
   real. Solo afecta a esa regla y no omite ninguna otra comprobación.
 - D-T4b-1 queda cumplida: el verificador está integrado antes de T5. D-T4b-2 queda superada: lo
   que sigue a una ronda ya se verifica y el veredicto "no verificable" desapareció.
+
+**T4d (resolución de la auditoría de T4–T4c, antes de T5).** La auditoría no encontró ningún
+camino para ejecutar un paso real no permitido, pero sí cuatro huecos del proceso (I-1 a I-4).
+Decisiones del autor:
+
+| ID | Decisión del autor |
+|---|---|
+| D-T4d-1 | Con grupos no sintéticos, una violación A2, una `InitializationError`, un intento sin registro reconocible o un directorio parcial en cualquier destino de P1 producen **STOP definitivo** desde la herramienta mientras no exista un procedimiento de recuperación aprobado. Se conservan `failure.json`, la procedencia fallida y su registro de A2; los CSV de un bloque fallido se siguen borrando (T3-4). Los fallos de infraestructura siguen siendo repetibles. El texto correspondiente de T3c en el diccionario de datos se precisa con autorización expresa |
+| D-T4d-2 | Todas las iteraciones comparten la misma versión del código de simulación, del código de análisis y del entorno (huellas SHA-256, sin datos personales ni identidad física de la máquina); cualquier diferencia es STOP. La versión del sistema operativo forma parte del entorno: las actualizaciones se pausan durante P1. El procedimiento de reevaluación de P1-19 (versiones nuevas de criterios en directorios nuevos, sin sobrescribir los originales, procesando todos los bloques y con autorización previa) queda **aprobado pero aplazado**: mientras no se implemente, un cambio del código de análisis después de la primera iteración es STOP |
+| D-T4d-3 | Las decisiones del autor se registran en `configs/pilots/p1_decisions/NNN.yaml` (esquema estricto `neuroeco.p1-decision/1`), vinculadas por SHA-256 al paso que autorizan y al bloque y criterios que juzgan: `b_criteria` (continuar o repetir la etapa con criterios B incumplidos, D-T4b-3), `entry_review` (una decisión por **cada** fila B y C de la evaluación de entrada) y `d9_e5` (vía E5 de D9). Sustituyen a `--d9-confirmed`, que desaparece (cambia el mecanismo de D-T4b-4, con autorización del autor); las dos pruebas de T4c que lo usaban se sustituyen por otras más estrictas |
+| D-T4d-4 | `results/pilots/p1/RESERVED.json` declara la raíz de resultados reales, fija el SHA-256 de la especificación aprobada y las huellas de referencia, y se crea en T5-0. Bajo esa raíz solo se admite la tabla aprobada, comprobado antes de escribir nada. `neuroeco view` y `pilot p0` (F1–F2, cerradas) no se modifican: no pueden sobrescribir ningún archivo de P1, y lo que añadan se detecta (árbol limpio o contenido inesperado). La prueba de T4c que llega a la ejecución con grupos reales crea un marcador en su directorio temporal |
+| D-T4d-5 | Incrementos con push y CI correcto en Ubuntu y Windows antes de continuar. La prueba de extremo a extremo sustituye solo el veredicto S_X en la prueba, sin alterar filas. M-2 se incorpora; M-5 se aplaza |
 
 **T4 (evaluación de los criterios desde los CSV; detalle en
 [p1_data_dictionary.md](p1_data_dictionary.md)).** `analysis/calibration.py` (P1-10) lee un
@@ -587,11 +600,11 @@ Los resultados se usan solo si pertenecen a su especificación registrada (SHA-2
 | T4-I3 comando `pilot p1-criteria` | `1b7f786` | Publicado con I4 (`43807682418` ✅) |
 | T4-I4 selección de P1-17 y registro de T4 | `85c42af` | `43807682418` ✅ (802 pruebas en Ubuntu y en Windows) |
 | T4 cierre documental | `64a4454` | `43808611612` ✅ |
-| T4b verificador de la secuencia | `42bce95` | `43810435648` ✅ |
+| T4b verificador de la secuencia | `42bce95` | `43810435648` ✅ (836 pruebas) |
 | T4c-C1 rejillas de una ronda | `0a0bc02` | Publicado con C2 (`43815758642` ✅) |
 | T4c-C2 A_rev | `1446161` | `43815758642` ✅ (847 pruebas en Ubuntu y en Windows) |
-| T4c-C3 transiciones tras una ronda (parte 1) | `4f991ca` | Publicado con la parte 2 |
-| T4c-C3 puerta de la secuencia en `pilot p1` (parte 2) | commit que añade esta fila | CI de su publicación (resultado en el informe al autor) |
+| T4c-C3 transiciones tras una ronda (parte 1) | `4f991ca` | Publicado con la parte 2 (`43818450043` ✅) |
+| T4c-C3 puerta de la secuencia en `pilot p1` (parte 2) | `eaf128b` | `43818450043` ✅ (885 pruebas en Ubuntu y en Windows) |
 
 **Incidencias durante F4:**
 

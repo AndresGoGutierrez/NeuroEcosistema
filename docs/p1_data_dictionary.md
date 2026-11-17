@@ -353,8 +353,9 @@ no estimable con δ = −1 es el intervalo degenerado {−1} y se cumple (D1), y
 no estimable no se cumple. El generador de cada intervalo se reconstruye de su fila de
 `bootstrap_keys.csv` exactamente como `SeedRegistry.generator`.
 
-La selección del ganador de cada rejilla de una ronda (P1-17) no escribe archivos en T4: es una
-función pura (`select_prey`, `select_predator`) que T4c usará sobre las filas de `rules` en A.
+`pilot p1-criteria` no evalúa las rejillas de una ronda. Su ganador (P1-17) lo calculan las
+funciones puras `select_prey` y `select_predator` sobre las filas de `rules` en A, y `pilot p1`
+lo publica en `selection.json` de cada rejilla (T4c; ver "Rondas de ajuste de las reglas").
 
 ### `criteria_provenance.json`
 
