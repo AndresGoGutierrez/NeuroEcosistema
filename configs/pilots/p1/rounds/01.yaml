@@ -1,0 +1,16 @@
+# P1 round 01 (ADR-033, P1-17, P1-18, P1-19). Registered and published before its execution.
+round_number: 1
+after_iteration: 1
+values:
+  plant_energy: 30.0
+  regrow_delay: 50
+  n_plants_a: 40
+  n_plants_b: 15
+  n_predators_c: 8
+  prey_flee_threshold: 0.3
+  prey_cruise_fraction: 0.5
+  predator_cruise_fraction: 0.5
+motive: >-
+  La iteración 1 cumplió S_A con r = 0 < 3 (P1-18): primera ronda de ajuste de las reglas
+  (P1-17) partiendo de los valores de la iteración 1.
+exploratory_observations: ""
