@@ -1,0 +1,19 @@
+# P1 iteration 003 (ADR-033, P1-18, P1-19). Registered and published before its execution.
+iteration: 3
+stage: B
+changed_parameter: n_plants_b
+values:
+  plant_energy: 30.0
+  regrow_delay: 50
+  n_plants_a: 40
+  n_plants_b: 7
+  n_predators_c: 8
+  prey_flee_threshold: 0.2
+  prey_cruise_fraction: 0.3
+  predator_cruise_fraction: 0.7
+motive: >-
+  La iteración 2 no cumplió S_B (P1-18): A6 (B, A) falla porque con N_B = 15 la supervivencia de B
+  (0.339) no difiere de la de A (0.340; delta de Cliff 0.038, IC BCa [-0.25, 0.33]). Causa
+  paramétrica: la escasez de B es insuficiente. Se reduce N_B a la mitad, de 15 a 7 (etapa B: solo
+  n_plants de B, 1 <= N_B < N_A).
+exploratory_observations: ""
