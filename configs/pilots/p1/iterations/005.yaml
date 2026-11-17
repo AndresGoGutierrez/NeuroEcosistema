@@ -1,0 +1,17 @@
+# P1 iteration 005 (ADR-033, P1-18, P1-19). Registered and published before its execution.
+iteration: 5
+stage: C
+changed_parameter: none
+values:
+  plant_energy: 30.0
+  regrow_delay: 50
+  n_plants_a: 40
+  n_plants_b: 4
+  n_predators_c: 8
+  prey_flee_threshold: 0.2
+  prey_cruise_fraction: 0.3
+  predator_cruise_fraction: 0.7
+motive: >-
+  La iteración 4 cumplió S_B y el autor decidió pasar a la etapa C con B4 (ii) pendiente de ADR
+  (decisión 1, P1-18): primera evaluación de los escenarios A y C (C_eval) con los valores vigentes.
+exploratory_observations: ""

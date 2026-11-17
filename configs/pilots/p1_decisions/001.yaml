@@ -1,0 +1,27 @@
+# P1 author decision 001 (D-T4d-3, P1-18): stage B met S_B with B4 (ii) missed.
+schema: neuroeco.p1-decision/1
+decision: 1
+kind: b_criteria
+step:
+  kind: iteration
+  number: 5
+judges:
+  directory: calibration/iteration_004
+  provenance_sha256: fa347e48b8759b2a8e7b54c638679abf1e5ee0fc342dd57c86133258ad8730c7
+  criteria_sha256: db112290c0216b34f20c2edf04b393aab5d7589f79d1cd43efe6f34bd65c965d
+choice: next_stage
+items:
+  - criterion: B4
+    part: ii
+    scenario: B-A
+    status: fail
+    decision: accepted_pending_adr
+    justification: >-
+      La tasa neta media de energía de las presas en no_predators es negativa ya en A (-0.042)
+      y no depende de N_B, único parámetro ajustable en la etapa B; no hay causa paramétrica
+      identificable en B. Es el caso previsto en D12: E3 (ADR-030) se mantiene y el
+      incumplimiento se documenta y se decide por ADR tras la confirmación.
+justification: >-
+  La iteración 4 cumple S_B (A6 (B, A) con IC BCa [-0.74, -0.26]). El único criterio B
+  incumplido, B4 (ii), no tiene causa paramétrica en la etapa B, así que no justifica otra
+  iteración B (P1-18): se pasa a la etapa C.
