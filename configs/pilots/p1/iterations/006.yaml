@@ -1,0 +1,18 @@
+# P1 iteration 006 (ADR-033, P1-18, P1-19). Registered and published before its execution.
+iteration: 6
+stage: C
+changed_parameter: n_predators_c
+values:
+  plant_energy: 30.0
+  regrow_delay: 50
+  n_plants_a: 40
+  n_plants_b: 4
+  n_predators_c: 6
+  prey_flee_threshold: 0.2
+  prey_cruise_fraction: 0.3
+  predator_cruise_fraction: 0.7
+motive: >-
+  La iteración 5 cumplió S_C, pero B1 (supervivencia 0.161 < 1/5) y B3 (2/15) fallan en C porque
+  con 8 depredadores las presas se agotan (decisión 2 del autor, P1-18). Se reduce n_pred,C de 8
+  a 6, que sigue siendo mayor que n_pred,A = 3 y conserva margen para A4 (d).
+exploratory_observations: ""
