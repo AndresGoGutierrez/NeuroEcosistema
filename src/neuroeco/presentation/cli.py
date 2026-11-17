@@ -40,6 +40,7 @@ from neuroeco.infrastructure.storage import (
 from neuroeco.presentation.inspector import SessionInfo
 from neuroeco.presentation.pilot_p1 import pilot_p1
 from neuroeco.presentation.pilot_p1_criteria import pilot_p1_criteria
+from neuroeco.presentation.pilot_p1_reserve import pilot_p1_reserve
 from neuroeco.presentation.pilot_p1_sequence import pilot_p1_sequence
 
 app = typer.Typer(no_args_is_help=True, help="NeuroEcosistema command-line interface.")
@@ -48,6 +49,7 @@ app.add_typer(pilot_app, name="pilot")
 pilot_app.command("p1")(pilot_p1)  # F4 T3 (ADR-033)
 pilot_app.command("p1-criteria")(pilot_p1_criteria)  # F4 T4-I3 (ADR-033, D1)
 pilot_app.command("p1-sequence")(pilot_p1_sequence)  # F4 T4b (ADR-033 P1-18, D-T4b-1)
+pilot_app.command("p1-reserve")(pilot_p1_reserve)  # F4 T4d (D-T4d-4)
 
 USER_ERRORS = (ConfigError, ConfigurationError, InitializationError, ValueError)
 

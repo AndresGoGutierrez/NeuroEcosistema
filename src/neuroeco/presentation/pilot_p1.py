@@ -103,6 +103,7 @@ from neuroeco.application.calibration import (
     scenario_overrides,
     sequence_gate_required,
     stage_scenarios,
+    uses_approved_table,
 )
 from neuroeco.application.configs import ResolvedConfig
 from neuroeco.bootstrap import DEFAULT_CONFIG_DIR, EXPLORATORY_SEED_GROUP, build_policy
@@ -119,6 +120,13 @@ from neuroeco.infrastructure.config_loader import (
 )
 from neuroeco.infrastructure.decision_loader import load_decisions
 from neuroeco.infrastructure.fingerprint import P1_DEPENDENCIES, p1_fingerprint
+from neuroeco.infrastructure.p1_reserved import (
+    RESERVED_FILE,
+    ReservedRootError,
+    read_reserved,
+    reserved_root,
+    same_directory,
+)
 from neuroeco.infrastructure.provenance import (
     collect_provenance,
     dependency_versions,
@@ -807,6 +815,7 @@ def sequence_gate(
     output_root: Path,
     prey_e_max: float,
     fingerprint: Mapping[str, Any],
+    config_files: Mapping[str, str],
 ) -> tuple[dict[str, Any], list[Path]]:
     """D-T4c-5: the P1-18 sequence allows this block, unless the specification is synthetic.
 
@@ -825,7 +834,7 @@ def sequence_gate(
     except ConfigError as error:
         raise P1RefusalError(f"author decisions (D-T4d-3): {error}") from error
     return check_sequence_gate(
-        mode, registry, output_root, spec, decisions, prey_e_max, fingerprint
+        mode, registry, output_root, spec, decisions, prey_e_max, fingerprint, config_files
     )
 
 
@@ -879,7 +888,14 @@ def preflight(
     )
     fingerprint = p1_fingerprint(Path.cwd() / "uv.lock")
     gate_record, gate_files = sequence_gate(
-        mode, spec_path, spec, registry, output_root, reference.world.prey.e_max, fingerprint
+        mode,
+        spec_path,
+        spec,
+        registry,
+        output_root,
+        reference.world.prey.e_max,
+        fingerprint,
+        config_files,
     )
 
     check_no_recalibration(mode, output_root)
@@ -1051,6 +1067,63 @@ def repository_checks(
     }
 
 
+def check_reserved_use(spec_path: Path, output_root: Path) -> None:
+    """D-T4d-4: under the reserved root only the approved specification writes, at its root.
+
+    Runs before anything is written. The marker is searched from ``output_root`` up through the
+    file system, so any spelling of the same directory finds it. Without a marker nothing is
+    checked here (the synthetic tests and their temporary repositories).
+    """
+    root = reserved_root(output_root)
+    if root is None:
+        return
+    marker = read_reserved(root)
+    label = (root / RESERVED_FILE).as_posix()
+    if not same_directory(output_root, root):
+        raise ReservedRootError(
+            f"{label} reserves {root.as_posix()}: the output root must be that directory itself"
+        )
+    if not uses_approved_table(load_p1_spec(spec_path, {})):
+        raise ReservedRootError(
+            f"{label}: only the approved P1 table (ADR-033, P1-5, P1-13) writes under the real "
+            "results; a synthetic or modified specification is refused"
+        )
+    if file_sha256(spec_path) != marker["p1_spec_sha256"]:
+        raise ReservedRootError(f"{label}: {spec_path.as_posix()} is not the reserved spec")
+
+
+def check_real_root(plan: Preflight, spec_path: Path, output_root: Path) -> str | None:
+    """D-T4d-4: a real block runs only at its reserved root, on the reference fingerprints.
+
+    Checked after the git checks (the canonical paths of IA-3 come first). Returns the SHA-256
+    of the marker, recorded in the provenance; None when there is no marker (synthetic).
+    """
+    root = reserved_root(output_root)
+    marker_path = None if root is None else root / RESERVED_FILE
+    if not plan.real_groups:
+        return None if marker_path is None else file_sha256(marker_path)
+    if root is None or marker_path is None or not same_directory(output_root, root):
+        raise P1RefusalError(
+            f"the real P1 seed groups run only at a root reserved by {RESERVED_FILE} (D-T4d-4)"
+        )
+    marker = read_reserved(root)
+    if file_sha256(spec_path) != marker["p1_spec_sha256"]:
+        raise P1RefusalError(f"{spec_path.as_posix()} is not the reserved spec (D-T4d-4)")
+    reference = marker["fingerprint"]
+    different = [
+        f"{part}.{name}"
+        for part, values in (plan.fingerprint or {}).items()
+        for name, value in values.items()
+        if not isinstance(reference.get(part), dict) or reference[part].get(name) != value
+    ]
+    if different:
+        raise P1RefusalError(
+            f"STOP (P1-18): {different} differ from the reference fingerprint of "
+            f"{RESERVED_FILE} (D-T4d-2, D-T4d-4)"
+        )
+    return file_sha256(marker_path)
+
+
 def refuse_on_git(base: Mapping[str, Any], checks: Mapping[str, Any], *, real_groups: bool) -> None:
     if base.get("git_dirty") is not False:
         raise P1RefusalError(
@@ -1191,6 +1264,7 @@ def provenance_document(
         "previous_attempts": plan.attempts,
         "sequence_gate": plan.sequence_gate,  # T4c, D-T4c-5 (additive, Mn-8)
         "fingerprint": plan.fingerprint,  # T4d, D-T4d-2 (additive, Mn-8)
+        "reserved_sha256": None,  # T4d, D-T4d-4: set after the git checks
         "git_checks": None,
         "uv_lock_sha256": file_sha256(uv_lock) if uv_lock.exists() else None,
         "dependencies": dependency_versions(DEPENDENCIES),
@@ -1389,6 +1463,12 @@ def pilot_p1(
         typer.echo(f"error: {error}", err=True)
         raise typer.Exit(code=EXIT_FAILURE) from error
 
+    try:  # D-T4d-4: checked before anything is written, so a refusal leaves no record there
+        check_reserved_use(spec_path, output_root)
+    except (ValueError, OSError) as error:
+        typer.echo(f"refused: {error}", err=True)
+        raise typer.Exit(code=EXIT_FAILURE) from error
+
     destination = mode.destination(output_root)
     phase, partial, provenance, completed = "preflight", None, None, 0
     try:
@@ -1403,6 +1483,7 @@ def pilot_p1(
         )
         provenance["git_checks"] = checks
         refuse_on_git(base, checks, real_groups=plan.real_groups)
+        provenance["reserved_sha256"] = check_real_root(plan, spec_path, output_root)
 
         phase = "execution"
         started = time.perf_counter()

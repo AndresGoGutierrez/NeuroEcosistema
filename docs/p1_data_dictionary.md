@@ -131,6 +131,7 @@ resuelta), `finished_utc`, `duration_seconds`, `episodes_written`, `episodes_dis
 | `input_files` (T3c) | Ruta y SHA-256 de cada archivo leído: configuración, especificaciones registradas y archivos de los resultados exigidos |
 | `prerequisites` | Resultados completos exigidos antes de este bloque: directorio, modo, `values_iteration` y SHA-256 de su `provenance.json` |
 | `previous_attempts` | Intentos anteriores en el mismo destino: directorio y `kind` (`failure`, `interrupted`, `unrecognized`, o `partial` para un directorio parcial sin recuperar), con fase, tipo de error, fecha y `a2_violation` (verdadero, falso o `null` si no se puede saber) |
+| `reserved_sha256` (T4d) | SHA-256 de `RESERVED.json` bajo el que se ejecutó el bloque; `null` sin marcador (especificaciones sintéticas) |
 | `fingerprint` (T4d) | Huellas SHA-256 del código (`code.simulation`: el paquete sin `analysis`; `code.analysis`) con los finales de línea normalizados, y del entorno (`environment`: Python, implementación, `sys.platform`, sistema operativo con su versión, arquitectura, orden de bytes, versiones de las dependencias, SHA-256 de `uv.lock`, variables de hilos de ADR-016 y capacidades de CPU que usa numpy). No incluye nombre del equipo, usuario ni rutas. `criteria_provenance.json` registra la misma huella al evaluar |
 | `sequence_gate` (T4c) | Verificación de la secuencia de P1-18 antes del bloque (D-T4c-5): `applied`; si se aplicó, `step` (el paso que se ejecuta), `verdict` (`allowed`, o `author_authorization_required` en una confirmación), `reason`, `notes`, `transitions` (cada transición verificada) y `d9_confirmed`; si no se aplicó, `reason` (especificación sintética) |
 | `git_checks` | `root`; `outside_repository` y `untracked` (archivos leídos fuera del repositorio o sin versionar); `hidden_changes` (marcas assume-unchanged o skip-worktree); `content_overrides` (filtros `clean`/`process` configurados o referencias `refs/replace/`); `head_mismatches` (archivos versionados cuyo contenido difiere de HEAD); `package_inside`; `canonical_paths`; `output_root_inside`; `ignored_outputs`; `head`, `upstream`, `upstream_full_ref`, `remote`, `remote_url` (sin credenciales), `upstream_commit` y `synchronized` |
@@ -455,6 +456,35 @@ cualquier otra comprobación de resultados, `pilot p1` construye los pasos exact
   a HEAD (P1-19).
 - **Flujo de cada paso:** `pilot p1` → `pilot p1-criteria` → commit y push → siguiente paso.
 
+## Raíz reservada de los resultados reales: `RESERVED.json` (T4d, D-T4d-4)
+
+`neuroeco pilot p1-reserve [--spec configs/pilots/p1.yaml] [--output-root results/pilots/p1]`
+escribe una sola vez, antes del primer bloque real (T5-0), `results/pilots/p1/RESERVED.json`
+(`neuroeco.p1-reserved/1`): `p1_spec_sha256` (la especificación aprobada) y `fingerprint` (las
+huellas de referencia del código y del entorno). Se niega si la especificación no es la tabla
+aprobada, si la raíz ya está reservada (en ella o más arriba) o si ya contiene algo. Después se
+versiona con commit y push.
+
+- **Antes de escribir nada.** `pilot p1` busca el marcador desde `--output-root` hacia arriba en
+  el sistema de archivos (rutas relativas o absolutas, `..`, enlaces simbólicos, uniones de
+  Windows, mayúsculas distintas). Si lo encuentra, solo acepta la raíz exacta, la tabla aprobada
+  y la especificación con el SHA-256 reservado; si no, rechaza sin escribir nada, ni siquiera un
+  registro de fallo. `pilot p1-criteria` tampoco evalúa bajo la raíz reservada un bloque de otra
+  especificación.
+- **Con los grupos reales**, después de las comprobaciones de git (las rutas canónicas de IA-3
+  van primero): el marcador debe estar en la raíz de salida y sus huellas de referencia deben
+  coincidir con las del código y el entorno que se ejecutan; una diferencia es STOP. La
+  procedencia registra `reserved_sha256`, y la puerta exige que todos los bloques publicados se
+  hayan ejecutado bajo el mismo marcador (cambiarlo después del primer bloque es STOP).
+- **Contenido inesperado (M-2).** Con el marcador, la puerta solo admite en la raíz el propio
+  marcador, los destinos de pasos registrados (iteraciones, fases de rondas registradas,
+  entrada y confirmaciones), sus intentos fallidos o parciales y los archivos propios de un
+  bloque o de un registro de fallo. Un resultado sin especificación registrada, o lo que otro
+  comando haya escrito allí (`neuroeco view`, `pilot p0`, que no se modifican, D-T4d-4), se
+  rechaza.
+- La puerta comprueba además que las rondas, A_rev y la entrada usaron los mismos
+  `config_files` (IA-3) y que la entrada lleva el SHA-256 de la última iteración registrada.
+
 ## Decisiones del autor: `configs/pilots/p1_decisions/NNN.yaml` (T4d, D-T4d-3)
 
 P1-18 deja tres juicios al autor. Cada uno se registra **antes** de ejecutar el paso que
@@ -503,7 +533,8 @@ Cada `items` tiene `criterion`, `part`, `scenario`, `status`, `decision` y `just
   `sequence_gate` a la procedencia (D-T4c-5), también aditivo.
 - **T4d:** campo añadido `fingerprint` en la procedencia y en `criteria_provenance.json`
   (D-T4d-2), y `blocks_fingerprinted` y `decisions` en `sequence_gate`. Aditivos; se mantienen
-  los identificadores `/1`. Primera versión de `neuroeco.p1-decision/1`.
+  los identificadores `/1`. Primera versión de `neuroeco.p1-decision/1`. Campo añadido
+  `reserved_sha256` en la procedencia y primera versión de `neuroeco.p1-reserved/1` (D-T4d-4).
 - **Política (Mn-8):** cualquier cambio futuro incompatible (quitar o renombrar un campo, o
   cambiar su tipo o su significado) incrementará la versión del esquema (`/2`). Los lectores
   (T4) deben validar los campos que usan y no solo el identificador.

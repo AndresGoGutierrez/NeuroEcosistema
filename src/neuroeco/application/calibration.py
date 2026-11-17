@@ -1151,6 +1151,15 @@ def sequence_gate_required(spec: P1Spec) -> bool:
     return not all(group >= SYNTHETIC_SEED_GROUPS_FROM for group in groups)
 
 
+def uses_approved_table(spec: P1Spec) -> bool:
+    """Whether every block has exactly the episodes and seed groups of ADR-033 (T4d)."""
+    return all(
+        (block.episodes, (block.seed_groups.a, block.seed_groups.b, block.seed_groups.c))
+        == APPROVED_BLOCKS[name]
+        for name, block in spec.blocks.named().items()
+    )
+
+
 def check_approved_seed_groups(spec: P1Spec) -> None:
     """A specification that declares any real P1 group must be exactly the approved one (T3b-1).
 

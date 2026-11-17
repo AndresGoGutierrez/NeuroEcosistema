@@ -64,6 +64,7 @@ from neuroeco.domain.state import InitializationError
 from neuroeco.infrastructure.config_loader import load_config, load_p1_spec
 from neuroeco.infrastructure.decision_loader import load_decisions
 from neuroeco.infrastructure.fingerprint import p1_fingerprint
+from neuroeco.infrastructure.p1_reserved import RESERVED_FILE, reserved_root, same_directory
 from neuroeco.infrastructure.provenance import file_sha256
 from neuroeco.presentation.pilot_p1 import (
     CALIBRATION_BLOCK,
@@ -159,15 +160,18 @@ def round_result(
     output_root: Path,
     p1_spec: P1Spec,
     files: list[Path] | None = None,
+    config_files: Mapping[str, str] | None = None,
 ) -> RoundResult | None:
     """Result of a round from its published phases (T4c); None until both grids exist.
 
     Each grid is verified as ``pilot p1`` verifies a prerequisite (completed, intact, the
     planned rows, the registered round) and its winner is recomputed from its rows (D-T4c-2).
     When a value changed, the A_rev outcome comes from its block and matching criteria.
-    ``files``, when given, receives every file read.
+    ``files``, when given, receives every file read; ``config_files``, when given, must be the
+    configuration of every phase (IA-3, T4d).
     """
     read = files if files is not None else []
+    same = {"config_files": dict(config_files)} if config_files else {}
     number = round_spec.round_number
     grids = [phase_directory(output_root, number, phase) for phase in GRID_PHASES]
     if not all(directory.exists() for directory in grids):
@@ -182,6 +186,7 @@ def round_result(
                 "round": number,
                 "values": dataclasses.asdict(values),
                 "values_source.sha256": registry.round_sha256(number),
+                **same,
             },
             p1_spec,
         )
@@ -199,6 +204,7 @@ def round_result(
                 "round": number,
                 "values": dataclasses.asdict(final),
                 "values_source.sha256": registry.round_sha256(number),
+                **same,
             },
         )
         reevaluation = block_outcome(directory, "A_rev")
@@ -207,13 +213,19 @@ def round_result(
 
 
 def build_steps(
-    registry: Registry, output_root: Path, p1_spec: P1Spec, files: list[Path] | None = None
+    registry: Registry,
+    output_root: Path,
+    p1_spec: P1Spec,
+    files: list[Path] | None = None,
+    config_files: Mapping[str, str] | None = None,
 ) -> list[Step]:
     """Registered iterations, each followed by its rounds, then the entry if it was published.
 
-    ``files``, when given, receives every published file read.
+    ``files``, when given, receives every published file read; ``config_files``, when given,
+    must be the configuration of every published block (IA-3; the gate of ``pilot p1``, T4d).
     """
     read = files if files is not None else []
+    same = {"config_files": dict(config_files)} if config_files else {}
     calibration = output_root / CALIBRATION_BLOCK
     rounds = sorted(registry.rounds, key=lambda item: item[1].round_number)
     steps: list[Step] = []
@@ -230,6 +242,7 @@ def build_steps(
                     "values": dataclasses.asdict(spec.values),
                     # the path is recorded as typed when the block ran; the content identifies it
                     "values_source.sha256": file_sha256(path),
+                    **same,
                 },
             )
             outcome = block_outcome(directory, spec.stage)
@@ -250,7 +263,7 @@ def build_steps(
                 r.round_number,
                 after_iteration=r.after_iteration,
                 values=dataclasses.asdict(r.values),
-                round_result=round_result(registry, r, output_root, p1_spec, read),
+                round_result=round_result(registry, r, output_root, p1_spec, read, config_files),
             )
             for _, r in rounds
             if r.after_iteration == spec.iteration
@@ -258,7 +271,10 @@ def build_steps(
     entry = calibration / ENTRY_LEAF
     if entry.exists():
         last = steps[-1].number if steps and steps[-1].kind == ITERATION else None
-        _check_provenance(entry, {"mode": "entry", "values_iteration": last})
+        expected: dict[str, Any] = {"mode": "entry", "values_iteration": last, **same}
+        if last is not None:  # the entry carries the values of the last registered iteration
+            expected["values_source.sha256"] = registry.sha256(last)
+        _check_provenance(entry, expected)
         steps.append(Step(ENTRY, 0, outcome=block_outcome(entry, "entry")))
         read.extend(evaluated_files(entry, "entry"))
     return steps
@@ -337,6 +353,7 @@ def check_sequence_gate(
     decisions: Sequence[tuple[Path, AuthorDecision]],
     prey_e_max: float,
     fingerprint: Mapping[str, Any],
+    config_files: Mapping[str, str] | None = None,
 ) -> tuple[dict[str, Any], list[Path]]:
     """Pre-flight of ``pilot p1`` (D-T4c-5): the record of the verification and the files read.
 
@@ -350,12 +367,19 @@ def check_sequence_gate(
     author decisions the steps need must exist and match what they judge (D-T4d-3).
     """
     raise_on_stops(attempt_stops(output_root), "D-T4d-1")
+    unexpected = reserved_content_problems(output_root, registry)
+    if unexpected:
+        raise P1RefusalError(
+            f"unexpected content in the reserved root of the real results: {unexpected}; only "
+            "the blocks, attempts and criteria of registered steps belong there (D-T4d-4)"
+        )
     files: list[Path] = [path for path, _ in decisions]
     try:
-        steps = build_steps(registry, output_root, p1_spec, files)
+        steps = build_steps(registry, output_root, p1_spec, files, config_files)
     except (SequenceError, CriteriaError, ValueError) as error:
         raise P1RefusalError(f"sequence (D-T4c-5): {error}") from error
     raise_on_stops(fingerprint_stops(files, fingerprint), "D-T4d-2")
+    raise_on_stops(reserved_stops(output_root, files), "D-T4d-4")
     kind, number = gate_target(mode)
     confirmed = d9_confirmations(decisions, registry, prey_e_max)
     report = gate_report(steps, kind, number, sorted(confirmed))
@@ -632,6 +656,83 @@ def fingerprint_stops(files: Sequence[Path], current: Mapping[str, Any]) -> list
             different = _differences(recorded, current)
             if different:
                 reasons.append(f"{path.as_posix()}: {different} differ from the running ones")
+    return reasons
+
+
+BLOCK_CONTENT = {
+    PROVENANCE_FILE,
+    "episodes.csv",
+    "bootstrap_keys.csv",
+    "selection.json",
+    CRITERIA_FILE,
+    CRITERIA_PROVENANCE_FILE,
+}
+FAILURE_CONTENT = {"failure.json", PROVENANCE_FILE}
+
+
+def _reserved_here(output_root: Path) -> Path | None:
+    root = reserved_root(output_root)
+    return root if root is not None and same_directory(root, output_root) else None
+
+
+def reserved_content_problems(output_root: Path, registry: Registry) -> list[str]:
+    """M-2 (D-T4d-4): what does not belong in the reserved root of the real results.
+
+    Only the marker, the destinations of registered steps (iterations, the phases of registered
+    rounds, the entry and the confirmations), their failed or partial attempts and the files of
+    a block or of a failure record. Results without a registered specification, and anything
+    another command wrote there, are refused. Nothing is checked without a marker.
+    """
+    root = _reserved_here(output_root)
+    if root is None:
+        return []
+    leaves = {f"{CALIBRATION_BLOCK}/iteration_{s.iteration:03d}" for _, s in registry.iterations}
+    leaves |= {
+        phase_directory(Path(), s.round_number, phase).as_posix()
+        for _, s in registry.rounds
+        for phase in PHASE_MODES
+    }
+    leaves |= {f"{CALIBRATION_BLOCK}/{ENTRY_LEAF}"}
+    leaves |= {f"{block}/{CONFIRMATION_LEAF}" for block in P1_BLOCKS[1:]}
+    parents = {Path(leaf).parent.as_posix() for leaf in leaves} | set(P1_BLOCKS)
+
+    def attempt_of_leaf(relative: str) -> bool:
+        """``<leaf>.failed-…`` or ``<leaf>.partial-…`` of a registered destination."""
+        for marker in (".failed-", ".partial-"):
+            if marker in relative:
+                return relative.split(marker)[0] in leaves
+        return False
+
+    problems = []
+    for path in sorted(root.rglob("*")):
+        relative = path.relative_to(root).as_posix()
+        parent = path.parent.relative_to(root).as_posix()
+        if path.is_dir():
+            ok = relative in leaves or relative in parents or attempt_of_leaf(relative)
+        elif parent == ".":
+            ok = path.name == RESERVED_FILE
+        elif parent in leaves:
+            ok = path.name in BLOCK_CONTENT
+        elif attempt_of_leaf(parent):
+            ok = ".partial-" in parent or path.name in FAILURE_CONTENT
+        else:
+            ok = False
+        if not ok:
+            problems.append(relative)
+    return problems
+
+
+def reserved_stops(output_root: Path, files: Sequence[Path]) -> list[str]:
+    """D-T4d-4: every published block ran under the current marker of the reserved root."""
+    root = _reserved_here(output_root)
+    if root is None:
+        return []
+    current = file_sha256(root / RESERVED_FILE)
+    reasons = []
+    for directory in published_directories(files):
+        record = _json(directory / PROVENANCE_FILE)
+        if not isinstance(record, dict) or record.get("reserved_sha256") != current:
+            reasons.append(f"{directory.as_posix()} did not run under the current {RESERVED_FILE}")
     return reasons
 
 

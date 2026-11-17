@@ -114,10 +114,14 @@ def test_a_real_sequence_that_is_allowed_reaches_the_execution_protections(
     setup, monkeypatch
 ) -> None:
     """Iteration 1 is the step P1-18 allows: the gate lets it through to the git checks and
-    the execution, where the guard stops it before the first episode."""
+    the execution, where the guard stops it before the first episode. T4d (D-T4d-4): a real
+    block runs only at a root reserved by RESERVED.json, written here by pilot p1-reserve."""
     configs, output, state = setup
     real_spec(configs)
     guard_episodes(monkeypatch)
+    spec = configs / "pilots" / "p1.yaml"
+    reserve = ["pilot", "p1-reserve", "--spec", str(spec), "--output-root", str(output)]
+    assert CliRunner().invoke(app, reserve).exit_code == 0
     result = invoke(configs, output, "--iteration", str(register(configs, 1, "A")))
     assert result.exit_code == 1
     assert state["inputs"] is not None  # the repository checks ran after the gate
@@ -125,8 +129,10 @@ def test_a_real_sequence_that_is_allowed_reaches_the_execution_protections(
     directory, failure = only_failure(output)
     assert failure["phase"] == "execution"
     assert "about to start" in failure["message"] and failure["episodes_completed"] == 0
-    gate = read_json(directory / "provenance.json")["sequence_gate"]
+    provenance = read_json(directory / "provenance.json")
+    gate = provenance["sequence_gate"]
     assert (gate["applied"], gate["step"], gate["verdict"]) == (True, "iteration 1", "allowed")
+    assert provenance["reserved_sha256"] == file_sha256(output / "RESERVED.json")
 
 
 # ---------------------------------------------------------------- synthetic specifications

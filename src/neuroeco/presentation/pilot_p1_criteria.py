@@ -47,6 +47,12 @@ from neuroeco.analysis.calibration import (
     requirements_met,
 )
 from neuroeco.infrastructure.fingerprint import p1_fingerprint
+from neuroeco.infrastructure.p1_reserved import (
+    RESERVED_FILE,
+    ReservedRootError,
+    read_reserved,
+    reserved_root,
+)
 from neuroeco.infrastructure.provenance import (
     dependency_versions,
     file_sha256,
@@ -198,6 +204,29 @@ def _existing_is_identical(result: Path, content: bytes, inputs: Mapping[str, st
     )
 
 
+def check_reserved_result(result: Path) -> None:
+    """D-T4d-4: under the reserved root, only blocks of the reserved specification are evaluated.
+
+    Checked before anything is written; without a marker nothing is checked.
+    """
+    root = reserved_root(result)
+    if root is None:
+        return
+    try:
+        marker = read_reserved(root)
+        record = json.loads((result / "provenance.json").read_text(encoding="utf-8"))
+    except (ReservedRootError, OSError, ValueError) as error:
+        raise CriteriaRefusalError(
+            f"the reserved root refuses {result.as_posix()}: {error}"
+        ) from None
+    spec = record.get("p1_spec") if isinstance(record, dict) else None
+    if not isinstance(spec, dict) or spec.get("sha256") != marker["p1_spec_sha256"]:
+        raise CriteriaRefusalError(
+            f"{result.as_posix()} was not produced by the reserved specification of "
+            f"{(root / RESERVED_FILE).as_posix()} (D-T4d-4)"
+        )
+
+
 def pilot_p1_criteria(
     result: Annotated[
         Path,
@@ -211,6 +240,7 @@ def pilot_p1_criteria(
     try:
         if not result.is_dir():
             raise CriteriaRefusalError(f"{result.as_posix()} is not a directory")
+        check_reserved_result(result)
         checks = repository_checks(Path.cwd(), result)
         refuse_on_git(checks)
         block = load_block(result)

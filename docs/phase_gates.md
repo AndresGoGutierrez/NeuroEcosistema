@@ -422,6 +422,17 @@ Decisiones del autor:
 | D-T4d-4 | `results/pilots/p1/RESERVED.json` declara la raíz de resultados reales, fija el SHA-256 de la especificación aprobada y las huellas de referencia, y se crea en T5-0. Bajo esa raíz solo se admite la tabla aprobada, comprobado antes de escribir nada. `neuroeco view` y `pilot p0` (F1–F2, cerradas) no se modifican: no pueden sobrescribir ningún archivo de P1, y lo que añadan se detecta (árbol limpio o contenido inesperado). La prueba de T4c que llega a la ejecución con grupos reales crea un marcador en su directorio temporal |
 | D-T4d-5 | Incrementos con push y CI correcto en Ubuntu y Windows antes de continuar. La prueba de extremo a extremo sustituye solo el veredicto S_X en la prueba, sin alterar filas. M-2 se incorpora; M-5 se aplaza |
 
+Implementación (detalle en [p1_data_dictionary.md](p1_data_dictionary.md)): T4d-1, STOP y
+huellas (`infrastructure/fingerprint.py`); T4d-2, decisiones del autor
+(`application/decisions.py`, `infrastructure/decision_loader.py`); T4d-3, raíz reservada
+(`infrastructure/p1_reserved.py`, comando `pilot p1-reserve`), revisión del contenido de la raíz
+(M-2), `config_files` de las rondas y SHA-256 de la entrada en la puerta, y una prueba de
+extremo a extremo que recorre A → ronda → B → C → entrada → confirmación con los grupos 40–48 (a
+los que se aplica la puerta) y las decisiones `b_criteria` y `entry_review` que exige.
+Pruebas de fases cerradas: ninguna cambia. Pruebas de T4c sustituidas con autorización: la lista
+de opciones de `pilot p1`, el caso de `--d9-confirmed` (ahora una decisión) y la prueba con
+grupos reales que llega a la ejecución, que ahora crea su marcador con `pilot p1-reserve`.
+
 **T4 (evaluación de los criterios desde los CSV; detalle en
 [p1_data_dictionary.md](p1_data_dictionary.md)).** `analysis/calibration.py` (P1-10) lee un
 bloque publicado, verifica su integridad (SHA-256 de `result_files`, bloque completo sin
@@ -606,6 +617,9 @@ Los resultados se usan solo si pertenecen a su especificación registrada (SHA-2
 | T4c-C2 A_rev | `1446161` | `43815758642` ✅ (847 pruebas en Ubuntu y en Windows) |
 | T4c-C3 transiciones tras una ronda (parte 1) | `4f991ca` | Publicado con la parte 2 (`43818450043` ✅) |
 | T4c-C3 puerta de la secuencia en `pilot p1` (parte 2) | `eaf128b` | `43818450043` ✅ (885 pruebas en Ubuntu y en Windows) |
+| T4d-0 registros de T4c y decisiones de T4d | `830bb83` | Publicado con T4d-1/2 (`44150152983` ✅) |
+| T4d-1/2 STOP, huellas y decisiones del autor | `6681ba7` | `44150152983` ✅ (933 pruebas en Ubuntu y en Windows) |
+| T4d-3 raíz reservada, M-2 y prueba de extremo a extremo | commit que añade esta fila | CI de su publicación (resultado en el informe al autor) |
 
 **Incidencias durante F4:**
 
