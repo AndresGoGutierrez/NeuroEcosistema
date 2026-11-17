@@ -623,7 +623,11 @@ Los resultados se usan solo si pertenecen a su especificación registrada (SHA-2
 | T4d-0 registros de T4c y decisiones de T4d | `830bb83` | Publicado con T4d-1/2 (`44150152983` ✅) |
 | T4d-1/2 STOP, huellas y decisiones del autor | `6681ba7` | `44150152983` ✅ (933 pruebas en Ubuntu y en Windows) |
 | T4d-3 raíz reservada, M-2 y prueba de extremo a extremo | `4d922ac` | `44152672597` ✅ (949 pruebas en Ubuntu y en Windows) |
-| T5-0 reserva de `results/pilots/p1`, guía de operación y esqueleto de P1 en el informe | commit que añade esta fila | CI de su publicación |
+| T5-0 reserva de `results/pilots/p1`, guía de operación y esqueleto de P1 en el informe | `d8adba8` | `44154946890` ✅ (949 pruebas en Ubuntu y en Windows) |
+| T5-1 iteración 1 (A): registro, dos rechazos de la verificación previa por filtros LFS de la máquina, resultados | `9c22a8c`, `80e71b3`, `923d15e`, `19f6503` | `44157776015` ✅ (registro) |
+| T5-2 ronda 1 (rejillas y A_rev) | `4627c71`, `cfbfb65`, `fb2cb77`, `c1ab495` | `44161743994` ✅ (registro) |
+| T5-3 ronda 2 (intento interrumpido recuperado con D18; rejillas sin cambios: T_fin) | `be3654c`, `1051923`, `2c2332b`, `5dd1229` | `44164747738` ✅ (registro) |
+| T5-4 iteración 2 (B): registro | commit que añade esta fila | CI de su publicación |
 
 **Incidencias durante F4:**
 

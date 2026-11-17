@@ -1,0 +1,17 @@
+# P1 iteration 002 (ADR-033, P1-18, P1-19). Registered and published before its execution.
+iteration: 2
+stage: B
+changed_parameter: none
+values:
+  plant_energy: 30.0
+  regrow_delay: 50
+  n_plants_a: 40
+  n_plants_b: 15
+  n_predators_c: 8
+  prey_flee_threshold: 0.2
+  prey_cruise_fraction: 0.3
+  predator_cruise_fraction: 0.7
+motive: >-
+  La ronda 2 no cambió ningún valor (T_fin, P1-18): las reglas quedan fijas y empieza la etapa B
+  con la primera evaluación de los escenarios A y B (B_eval) con los valores vigentes.
+exploratory_observations: ""
