@@ -146,5 +146,6 @@ Cada paso real añade aquí una fila con su resultado y la decisión que siguió
 
 | Paso | Especificación | Commit del registro | Commit de los resultados | S_X | Criterios B incumplidos | Veredicto de la secuencia | Decisión |
 |---|---|---|---|---|---|---|---|
+| Iteración 1, intento 1 (rechazado) | `iterations/001.yaml` | `9c22a8c` | — (registro del rechazo: `iteration_001.failed-20261117T193505Z-daf4fb6a`) | — | — | — | Rechazo de la verificación previa sin ningún episodio: la configuración de Git del sistema y la global de la máquina definen los filtros `filter.lfs.clean`/`process` (T3c IA-1). El repositorio no usa LFS. Se retiran los filtros de la máquina y se repite la iteración sin cambiar su registro |
 
-Todavía no se ha ejecutado ningún paso real.
+Todavía no se ha completado ningún paso real.
