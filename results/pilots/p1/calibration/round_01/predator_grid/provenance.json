@@ -1,0 +1,533 @@
+{
+  "a2_violation": false,
+  "author_authorized": false,
+  "block": "calibration",
+  "bootstrap_run": 0,
+  "command": [
+    "C:\\Universidad Santoto\\Noveno Semestre\\ProyectosIA\\NEUROECOSISTEMA\\.venv\\Scripts\\neuroeco",
+    "pilot",
+    "p1",
+    "--round",
+    "configs/pilots/p1/rounds/01.yaml",
+    "--phase",
+    "predator"
+  ],
+  "config_files": {
+    "base": "ebed2b52917757f0fafc0bd8e3a3718abbe92c8cfdd2e027ba4dacdfc931fd81",
+    "baselines": "0f9ed5dd2d430f3c648e84c78560ad07c9ca2002ac2a35cf356c729bd4ecc8b8",
+    "p0_spec": "1b571bbe22926d1bef9cf42d3647b0255b3e682aff90bda945c8c8152f4453cc",
+    "p1_spec": "ae61c010af8252659b7c117151f9ceaf6d98af9cfd4c77ce1d90430c90565c3e",
+    "scenarios": "ded87046bbc3ce958d70c4cb9787b7096db4b39f21861cd7797daa3435313367"
+  },
+  "config_hash": "176c8fb0a37fcd65819eab5295019fd395a8b069630ce2771dc137309f0f02eb",
+  "configurations": [
+    {
+      "config_hash": "176c8fb0a37fcd65819eab5295019fd395a8b069630ce2771dc137309f0f02eb",
+      "overrides": [
+        "world.plant_energy=30.0",
+        "world.regrow_delay=50",
+        "world.n_plants=40",
+        "rules.prey.flee_threshold=0.2",
+        "rules.prey.cruise_fraction=0.3",
+        "rules.predator.cruise_fraction=0.3"
+      ],
+      "rules": {
+        "predator": {
+          "cruise_fraction": 0.3
+        },
+        "prey": {
+          "cruise_fraction": 0.3,
+          "flee_threshold": 0.2
+        }
+      },
+      "scenario": "A",
+      "world": {
+        "capture_radius": 2.5,
+        "eat_radius": 1.5,
+        "n_plants": 40,
+        "n_predators": 3,
+        "n_prey": 25,
+        "plant_energy": 30.0,
+        "predator": {
+          "c_basal": 0.16,
+          "c_move": 0.32,
+          "e_max": 100.0,
+          "initial_energy_fraction": 0.8,
+          "omega_max": 0.3,
+          "v_max": 1.3,
+          "vision_radius": 20.0
+        },
+        "prey": {
+          "c_basal": 0.16,
+          "c_move": 0.32,
+          "e_max": 100.0,
+          "initial_energy_fraction": 0.8,
+          "omega_max": 0.5,
+          "v_max": 1.0,
+          "vision_radius": 20.0
+        },
+        "prey_energy": 40.0,
+        "regrow_delay": 50,
+        "size": 150.0,
+        "t_max": 1000
+      }
+    },
+    {
+      "config_hash": "6b7a517e7786e5227bf91d148a1987df0e8255d806909b0f3be2ab434a801f22",
+      "overrides": [
+        "world.plant_energy=30.0",
+        "world.regrow_delay=50",
+        "world.n_plants=40",
+        "rules.prey.flee_threshold=0.2",
+        "rules.prey.cruise_fraction=0.3",
+        "rules.predator.cruise_fraction=0.5"
+      ],
+      "rules": {
+        "predator": {
+          "cruise_fraction": 0.5
+        },
+        "prey": {
+          "cruise_fraction": 0.3,
+          "flee_threshold": 0.2
+        }
+      },
+      "scenario": "A",
+      "world": {
+        "capture_radius": 2.5,
+        "eat_radius": 1.5,
+        "n_plants": 40,
+        "n_predators": 3,
+        "n_prey": 25,
+        "plant_energy": 30.0,
+        "predator": {
+          "c_basal": 0.16,
+          "c_move": 0.32,
+          "e_max": 100.0,
+          "initial_energy_fraction": 0.8,
+          "omega_max": 0.3,
+          "v_max": 1.3,
+          "vision_radius": 20.0
+        },
+        "prey": {
+          "c_basal": 0.16,
+          "c_move": 0.32,
+          "e_max": 100.0,
+          "initial_energy_fraction": 0.8,
+          "omega_max": 0.5,
+          "v_max": 1.0,
+          "vision_radius": 20.0
+        },
+        "prey_energy": 40.0,
+        "regrow_delay": 50,
+        "size": 150.0,
+        "t_max": 1000
+      }
+    },
+    {
+      "config_hash": "7fc1b87c48522845ec3660256443af07d6084c0afd40f20361adc8fe7d15887a",
+      "overrides": [
+        "world.plant_energy=30.0",
+        "world.regrow_delay=50",
+        "world.n_plants=40",
+        "rules.prey.flee_threshold=0.2",
+        "rules.prey.cruise_fraction=0.3",
+        "rules.predator.cruise_fraction=0.7"
+      ],
+      "rules": {
+        "predator": {
+          "cruise_fraction": 0.7
+        },
+        "prey": {
+          "cruise_fraction": 0.3,
+          "flee_threshold": 0.2
+        }
+      },
+      "scenario": "A",
+      "world": {
+        "capture_radius": 2.5,
+        "eat_radius": 1.5,
+        "n_plants": 40,
+        "n_predators": 3,
+        "n_prey": 25,
+        "plant_energy": 30.0,
+        "predator": {
+          "c_basal": 0.16,
+          "c_move": 0.32,
+          "e_max": 100.0,
+          "initial_energy_fraction": 0.8,
+          "omega_max": 0.3,
+          "v_max": 1.3,
+          "vision_radius": 20.0
+        },
+        "prey": {
+          "c_basal": 0.16,
+          "c_move": 0.32,
+          "e_max": 100.0,
+          "initial_energy_fraction": 0.8,
+          "omega_max": 0.5,
+          "v_max": 1.0,
+          "vision_radius": 20.0
+        },
+        "prey_energy": 40.0,
+        "regrow_delay": 50,
+        "size": 150.0,
+        "t_max": 1000
+      }
+    }
+  ],
+  "cpu_count": 32,
+  "dependencies": {
+    "numpy": "2.5.4",
+    "pandas": "3.1.1",
+    "pygame-ce": "2.5.8",
+    "pyyaml": "6.0.3",
+    "scipy": "1.18.1",
+    "threadpoolctl": "3.8.0",
+    "typer": "0.29.1"
+  },
+  "duration_seconds": 38.735,
+  "episodes_discarded": 0,
+  "episodes_per_condition": 30,
+  "episodes_planned": 90,
+  "episodes_written": 90,
+  "fingerprint": {
+    "code": {
+      "analysis": "4f4803bc0058ca6609489f37fe0e292abaab364f5ebc3358d97d34d9c81d4419",
+      "simulation": "740004ac7be88fbde2b0a42ab0a770edf89d26d0d6a3e0213ed7cc8476b3c88b"
+    },
+    "environment": {
+      "byteorder": "little",
+      "dependencies": {
+        "numpy": "2.5.4",
+        "pandas": "3.1.1",
+        "pygame-ce": "2.5.8",
+        "pyyaml": "6.0.3",
+        "scipy": "1.18.1",
+        "threadpoolctl": "3.8.0",
+        "typer": "0.29.1"
+      },
+      "implementation": "cpython",
+      "machine": "AMD64",
+      "numpy_cpu_features": [
+        "AVX",
+        "AVX2",
+        "BMI",
+        "BMI2",
+        "CX16",
+        "F16C",
+        "FMA3",
+        "GFNI",
+        "LAHF",
+        "LZCNT",
+        "MMX",
+        "MOVBE",
+        "POPCNT",
+        "SSE",
+        "SSE2",
+        "SSE3",
+        "SSE41",
+        "SSE42",
+        "SSSE3",
+        "VAES",
+        "VPCLMULQDQ",
+        "X86_V2",
+        "X86_V3"
+      ],
+      "os": [
+        "Windows",
+        "11",
+        "10.0.26200"
+      ],
+      "platform": "win32",
+      "python": "3.12.14",
+      "thread_env": {
+        "MKL_NUM_THREADS": "1",
+        "OMP_NUM_THREADS": "1",
+        "OPENBLAS_NUM_THREADS": "1"
+      },
+      "uv_lock_sha256": "a1696c0b67e691962127862195bcae1ce0f93a8db41e69a6814b88cc52717a14"
+    }
+  },
+  "finished_utc": "2026-11-17T19:57:58+00:00",
+  "git_checks": {
+    "canonical_paths": true,
+    "content_overrides": [],
+    "head": "cfbfb65197518a20522a52bf7c0c0a447315bb30",
+    "head_mismatches": [],
+    "hidden_changes": [],
+    "ignored_outputs": [],
+    "output_root_inside": true,
+    "outside_repository": [],
+    "package_inside": true,
+    "remote": "origin",
+    "remote_url": "https://github.com/AndresGoGutierrez/NeuroEcosistema.git",
+    "root": "C:/Universidad Santoto/Noveno Semestre/ProyectosIA/NEUROECOSISTEMA",
+    "synchronized": true,
+    "untracked": [],
+    "upstream": "origin/main",
+    "upstream_commit": "cfbfb65197518a20522a52bf7c0c0a447315bb30",
+    "upstream_full_ref": "refs/remotes/origin/main"
+  },
+  "git_commit": "cfbfb65197518a20522a52bf7c0c0a447315bb30",
+  "git_dirty": false,
+  "input_files": [
+    {
+      "path": "configs/pilots/p1.yaml",
+      "sha256": "ae61c010af8252659b7c117151f9ceaf6d98af9cfd4c77ce1d90430c90565c3e"
+    },
+    {
+      "path": "configs/pilots/p0.yaml",
+      "sha256": "1b571bbe22926d1bef9cf42d3647b0255b3e682aff90bda945c8c8152f4453cc"
+    },
+    {
+      "path": "configs/base.yaml",
+      "sha256": "ebed2b52917757f0fafc0bd8e3a3718abbe92c8cfdd2e027ba4dacdfc931fd81"
+    },
+    {
+      "path": "configs/scenarios.yaml",
+      "sha256": "ded87046bbc3ce958d70c4cb9787b7096db4b39f21861cd7797daa3435313367"
+    },
+    {
+      "path": "configs/baselines.yaml",
+      "sha256": "0f9ed5dd2d430f3c648e84c78560ad07c9ca2002ac2a35cf356c729bd4ecc8b8"
+    },
+    {
+      "path": "configs/pilots/p1/iterations/001.yaml",
+      "sha256": "39b160fe0b8224a797680bcf9b6bee099abd7d0563484d38817aca67e77930e4"
+    },
+    {
+      "path": "configs/pilots/p1/rounds/01.yaml",
+      "sha256": "a34fd3376f7dd4dd263fd1da08bf1cc50d6db460541810754b4a719c899f8696"
+    },
+    {
+      "path": "results/pilots/p1/calibration/iteration_001/provenance.json",
+      "sha256": "cb8677fb563e57318fae8297a9243533e5e4c87014f65bbb2d46189ea782dad2"
+    },
+    {
+      "path": "results/pilots/p1/calibration/iteration_001/episodes.csv",
+      "sha256": "93a97a438bde4f3935e83a1e6e6b907ab132284612f8540be58d5e65b0fc92ab"
+    },
+    {
+      "path": "results/pilots/p1/calibration/iteration_001/bootstrap_keys.csv",
+      "sha256": "dd59bf36bcd5251f0cdefa2bff6099cf756e63403ed291b6c15bf0b09f113dae"
+    },
+    {
+      "path": "results/pilots/p1/calibration/round_01/prey_grid/provenance.json",
+      "sha256": "7e5370045498a6e8302315e73db9148589fd650da396721afdd4d39016d01fef"
+    },
+    {
+      "path": "results/pilots/p1/calibration/round_01/prey_grid/episodes.csv",
+      "sha256": "81ead8ca88c0e76eb716d58f70eb63585dbfe7030bee241660dd5853918e7f5b"
+    },
+    {
+      "path": "results/pilots/p1/calibration/round_01/prey_grid/selection.json",
+      "sha256": "b7ec6fb63334a5dc0fe02b278383d637d186d65c19c66ce06125d8c1d83f78ec"
+    },
+    {
+      "path": "results/pilots/p1/calibration/iteration_001/criteria.csv",
+      "sha256": "ad226ba6c8731267001b8d0ee95e0787b3f23635adbe8d18cc6f3b7537360dd9"
+    },
+    {
+      "path": "results/pilots/p1/calibration/iteration_001/criteria_provenance.json",
+      "sha256": "1dd3e0b33fc36496eb75a019b49278d6fdfba50f2ceb5bade4e5f35547e1c644"
+    }
+  ],
+  "iteration": 1,
+  "machine": "AMD64",
+  "mode": "round_predator",
+  "numpy": "2.5.4",
+  "p1_spec": {
+    "path": "configs/pilots/p1.yaml",
+    "sha256": "ae61c010af8252659b7c117151f9ceaf6d98af9cfd4c77ce1d90430c90565c3e"
+  },
+  "phase": "predator",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "prerequisites": [
+    {
+      "directory": "results/pilots/p1/calibration/iteration_001",
+      "mode": "iteration",
+      "provenance_sha256": "cb8677fb563e57318fae8297a9243533e5e4c87014f65bbb2d46189ea782dad2",
+      "values_iteration": 1
+    },
+    {
+      "directory": "results/pilots/p1/calibration/round_01/prey_grid",
+      "mode": "round_prey",
+      "provenance_sha256": "7e5370045498a6e8302315e73db9148589fd650da396721afdd4d39016d01fef",
+      "values_iteration": 1
+    }
+  ],
+  "previous_attempts": [],
+  "processor": "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel",
+  "project_seed": "151810796106167051982782525292607188790",
+  "python": "3.12.14",
+  "registered_iterations": [
+    {
+      "path": "configs/pilots/p1/iterations/001.yaml",
+      "sha256": "39b160fe0b8224a797680bcf9b6bee099abd7d0563484d38817aca67e77930e4"
+    }
+  ],
+  "registered_rounds": [
+    {
+      "path": "configs/pilots/p1/rounds/01.yaml",
+      "sha256": "a34fd3376f7dd4dd263fd1da08bf1cc50d6db460541810754b4a719c899f8696"
+    }
+  ],
+  "reserved_sha256": "bb19d82dbfc10afcf9b94fd45437f4c5e1b744eb0e7b611cb30846a5a52f96d7",
+  "result_files": {
+    "episodes.csv": "f7b247c8a3f5752b2acd8fb9301576099606e696654b8d4084396107d118ea50",
+    "selection.json": "8a51449baea5bcb7f6157d0b6cbea9d129ee4cd75836e47bd574b01e10af6741"
+  },
+  "round": 1,
+  "scenarios": [
+    "A"
+  ],
+  "schema": "neuroeco.p1-provenance/1",
+  "sequence_gate": {
+    "applied": true,
+    "blocks_fingerprinted": 1,
+    "d9_confirmed": [],
+    "decisions": [],
+    "notes": [],
+    "reason": "S_A met with r = 0 < 3: a round (T)",
+    "step": "round 1",
+    "transitions": [
+      "iteration 1 (stage A) -> round 1: allowed"
+    ],
+    "verdict": "allowed"
+  },
+  "stage": "round_predator",
+  "state_k": {
+    "a1": true,
+    "b7_margin": 1.4000000000000021,
+    "checks": [
+      {
+        "constraint": "E1-prey",
+        "satisfied": true,
+        "scenario": "A",
+        "target": "E0 / c_basal / t_max in [0.4, 0.6]",
+        "value": 0.5
+      },
+      {
+        "constraint": "E2-prey",
+        "satisfied": true,
+        "scenario": "A",
+        "target": "c_move / c_basal >= 1",
+        "value": 2.0
+      },
+      {
+        "constraint": "E1-predator",
+        "satisfied": true,
+        "scenario": "A",
+        "target": "E0 / c_basal / t_max in [0.4, 0.6]",
+        "value": 0.5
+      },
+      {
+        "constraint": "E2-predator",
+        "satisfied": true,
+        "scenario": "A",
+        "target": "c_move / c_basal >= 1",
+        "value": 2.0
+      },
+      {
+        "constraint": "E5",
+        "satisfied": true,
+        "scenario": "A",
+        "target": "plant_energy / prey.e_max <= 0.5",
+        "value": 0.3
+      },
+      {
+        "constraint": "E1-prey",
+        "satisfied": true,
+        "scenario": "B",
+        "target": "E0 / c_basal / t_max in [0.4, 0.6]",
+        "value": 0.5
+      },
+      {
+        "constraint": "E2-prey",
+        "satisfied": true,
+        "scenario": "B",
+        "target": "c_move / c_basal >= 1",
+        "value": 2.0
+      },
+      {
+        "constraint": "E1-predator",
+        "satisfied": true,
+        "scenario": "B",
+        "target": "E0 / c_basal / t_max in [0.4, 0.6]",
+        "value": 0.5
+      },
+      {
+        "constraint": "E2-predator",
+        "satisfied": true,
+        "scenario": "B",
+        "target": "c_move / c_basal >= 1",
+        "value": 2.0
+      },
+      {
+        "constraint": "E5",
+        "satisfied": true,
+        "scenario": "B",
+        "target": "plant_energy / prey.e_max <= 0.5",
+        "value": 0.3
+      },
+      {
+        "constraint": "E1-prey",
+        "satisfied": true,
+        "scenario": "C",
+        "target": "E0 / c_basal / t_max in [0.4, 0.6]",
+        "value": 0.5
+      },
+      {
+        "constraint": "E2-prey",
+        "satisfied": true,
+        "scenario": "C",
+        "target": "c_move / c_basal >= 1",
+        "value": 2.0
+      },
+      {
+        "constraint": "E1-predator",
+        "satisfied": true,
+        "scenario": "C",
+        "target": "E0 / c_basal / t_max in [0.4, 0.6]",
+        "value": 0.5
+      },
+      {
+        "constraint": "E2-predator",
+        "satisfied": true,
+        "scenario": "C",
+        "target": "c_move / c_basal >= 1",
+        "value": 2.0
+      },
+      {
+        "constraint": "E5",
+        "satisfied": true,
+        "scenario": "C",
+        "target": "plant_energy / prey.e_max <= 0.5",
+        "value": 0.3
+      }
+    ]
+  },
+  "status": "completed",
+  "thread_env": {
+    "MKL_NUM_THREADS": "1",
+    "OMP_NUM_THREADS": "1",
+    "OPENBLAS_NUM_THREADS": "1"
+  },
+  "timestamp_utc": "2026-11-17T19:57:19+00:00",
+  "uv_lock_sha256": "a1696c0b67e691962127862195bcae1ce0f93a8db41e69a6814b88cc52717a14",
+  "values": {
+    "n_plants_a": 40,
+    "n_plants_b": 15,
+    "n_predators_c": 8,
+    "plant_energy": 30.0,
+    "predator_cruise_fraction": 0.5,
+    "prey_cruise_fraction": 0.3,
+    "prey_flee_threshold": 0.2,
+    "regrow_delay": 50
+  },
+  "values_iteration": 1,
+  "values_source": {
+    "path": "configs/pilots/p1/rounds/01.yaml",
+    "sha256": "a34fd3376f7dd4dd263fd1da08bf1cc50d6db460541810754b4a719c899f8696"
+  }
+}

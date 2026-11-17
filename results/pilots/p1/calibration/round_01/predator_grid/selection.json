@@ -1,0 +1,37 @@
+{
+  "objective": 654,
+  "parameters": [
+    "predator_cruise_fraction"
+  ],
+  "phase": "predator",
+  "rule": "unique",
+  "schema": "neuroeco.p1-selection/1",
+  "tied": [
+    [
+      0.7
+    ]
+  ],
+  "totals": [
+    {
+      "combination": [
+        0.3
+      ],
+      "total": 652
+    },
+    {
+      "combination": [
+        0.5
+      ],
+      "total": 647
+    },
+    {
+      "combination": [
+        0.7
+      ],
+      "total": 654
+    }
+  ],
+  "winner": {
+    "predator_cruise_fraction": 0.7
+  }
+}
