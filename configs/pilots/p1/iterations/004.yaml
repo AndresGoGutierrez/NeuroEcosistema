@@ -1,0 +1,19 @@
+# P1 iteration 004 (ADR-033, P1-18, P1-19). Registered and published before its execution.
+iteration: 4
+stage: B
+changed_parameter: n_plants_b
+values:
+  plant_energy: 30.0
+  regrow_delay: 50
+  n_plants_a: 40
+  n_plants_b: 4
+  n_predators_c: 8
+  prey_flee_threshold: 0.2
+  prey_cruise_fraction: 0.3
+  predator_cruise_fraction: 0.7
+motive: >-
+  La iteración 3 no cumplió S_B (P1-18): con N_B = 7 la supervivencia de B baja (0.316 frente a
+  0.340 en A; delta de Cliff -0.23) pero el límite superior del IC BCa de A6 (B, A) sigue siendo
+  positivo (0.087). Causa paramétrica: escasez de B todavía insuficiente. Se vuelve a reducir N_B
+  a la mitad redondeando hacia arriba, de 7 a 4, para conservar margen en B1 y B3.
+exploratory_observations: ""
