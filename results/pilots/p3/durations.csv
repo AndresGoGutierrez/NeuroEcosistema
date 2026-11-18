@@ -1,0 +1,9 @@
+configuration,run,seconds
+prey_base_A,p3_prey_base_A_r0,405.8
+prey_base_B,p3_prey_base_B_r0,244.2
+prey_base_C,p3_prey_base_C_r0,301.5
+predator_base_A,p3_predator_base_A_r0,360.2
+predator_base_B,p3_predator_base_B_r0,246.5
+predator_base_C,p3_predator_base_C_r0,341.0
+prey_compact_A,p3_prey_compact_A_r0,383.3
+predator_compact_A,p3_predator_compact_A_r0,367.8

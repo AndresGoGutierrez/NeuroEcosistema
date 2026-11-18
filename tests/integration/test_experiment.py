@@ -20,6 +20,7 @@ from neuroeco.presentation.cli import app
 
 CONFIGS = Path(__file__).resolve().parents[2] / "configs"
 PROTOCOL = {
+    "stage": "f8",
     "runs": 2,
     "test_episodes": 1,
     "first_seed_group": 100,
@@ -52,6 +53,15 @@ def test_formal_specs_are_balanced_and_independent() -> None:
 def test_formal_seed_groups_start_at_100() -> None:
     with pytest.raises(ValueError, match="start at 100"):
         Protocol(**{**PROTOCOL, "first_seed_group": 40})
+
+
+def test_p3_protocol_uses_its_own_seed_groups() -> None:
+    p3 = Protocol(**{**PROTOCOL, "runs": 1, "first_seed_group": 64, "stage": "p3"})
+    specs = formal_specs(p3)
+    assert {s.seed_group for s in specs} == set(range(64, 72))
+    assert all(s.name.startswith("p3_") for s in specs)
+    with pytest.raises(ValueError, match="P3"):
+        Protocol(**{**PROTOCOL, "first_seed_group": 64, "stage": "p3"})
 
 
 def test_rule_variants_follow_adr_012() -> None:

@@ -1,0 +1,19 @@
+# P3 (F6, ADR-035): one full run per configuration with the values decided in P2
+# (results/pilots/p2/p2_decision.json); it measures t_run to size R (ADR-004).
+stage: p3
+runs: 1
+test_episodes: 1
+first_seed_group: 64
+population: 40
+elite: 2
+tournament: 3
+episodes: 4
+validation_episodes: 16
+generations: 70
+validation_interval: 5
+sigma_prey_base: 0.1
+sigma_predator_base: 0.1
+sigma_prey_compact: 0.1
+sigma_predator_compact: 0.1
+curriculum_kappa: 2.0
+curriculum_generations: 35

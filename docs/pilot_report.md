@@ -221,3 +221,19 @@ V = 16, k = 2, t = 3, k_val = 5. Decisión con `neuroeco pilot p2-decide`
   F₀ = 0.000, F_base = 0.843, Δ = 0.0843, θ = 0.758.
 - Con σ = 0.10, una ejecución de 60 generaciones en A tardó 3–6 min con 16 workers; P3 mide
   t_run con los valores finales en los tres escenarios.
+
+## P3: duración de una ejecución completa (F6, ADR-004, ADR-035)
+
+Una ejecución por configuración con los valores de P2 (`configs/pilots/p3.yaml`, grupos de
+semillas 64–71, 16 workers, `results/pilots/p3/`).
+
+| Configuración | t_run (s) | F_val seleccionado (gen.) |
+|---|---|---|
+| prey_base A / B / C | 405.8 / 244.2 / 301.5 | 0.345 (69) / 0.284 (65) / 0.236 (65) |
+| predator_base A / B / C | 360.2 / 246.5 / 341.0 | 0.855 (45) / 0.753 (55) / 0.968 (40) |
+| prey_compact A | 383.3 | 0.288 (69) |
+| predator_compact A | 367.8 | 0.873 (65) |
+
+Σ t_run = 2650 s = 0.736 h. Con m = 30 % y H = 45 h, H_req(10) = 10 · 0.736 · 1.3 + H_eval
+≈ 10.6 h, así que R_max > 10 y **R = 10** (ADR-004). Las 8 configuraciones aprenden con los
+valores finales; ninguna queda en F_val = 0.

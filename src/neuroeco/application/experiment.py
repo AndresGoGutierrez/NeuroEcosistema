@@ -64,17 +64,24 @@ class Protocol:
     sigma_predator_compact: float
     curriculum_kappa: float
     curriculum_generations: int
+    stage: str = "f8"  # "p3": the timing pilot of F6, seed groups 64-71 (ADR-028, ADR-035)
 
     def __post_init__(self) -> None:
-        if self.runs < 1 or self.test_episodes < 1 or self.first_seed_group < 100:
-            raise ValueError("runs and test_episodes >= 1; formal seed groups start at 100")
+        if self.runs < 1 or self.test_episodes < 1:
+            raise ValueError("runs and test_episodes must be >= 1")
+        if self.stage == "f8" and self.first_seed_group < 100:
+            raise ValueError("formal seed groups start at 100")
+        if self.stage == "p3" and (self.first_seed_group != 64 or self.runs != 1):
+            raise ValueError("P3 uses seed groups 64-71 and one run per configuration")
+        if self.stage not in ("f8", "p3"):
+            raise ValueError(f"unknown stage {self.stage!r}")
 
     def sigma(self, architecture: str) -> float:
         return getattr(self, f"sigma_{architecture}")
 
 
-def run_name(architecture: str, scenario: str, run: int) -> str:
-    return f"f8_{architecture}_{scenario}_r{run}"
+def run_name(architecture: str, scenario: str, run: int, stage: str = "f8") -> str:
+    return f"{stage}_{architecture}_{scenario}_r{run}"
 
 
 def formal_specs(protocol: Protocol) -> list[TrainingSpec]:
@@ -86,7 +93,7 @@ def formal_specs(protocol: Protocol) -> list[TrainingSpec]:
             curriculum = species == "predator" and protocol.curriculum_kappa > 1.0
             specs.append(
                 TrainingSpec(
-                    name=run_name(architecture, scenario, run),
+                    name=run_name(architecture, scenario, run, protocol.stage),
                     species=species,
                     architecture=architecture,
                     scenario=scenario,
