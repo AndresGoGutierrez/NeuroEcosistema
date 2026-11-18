@@ -38,6 +38,7 @@ from neuroeco.infrastructure.storage import (
     write_csv,
     write_json,
 )
+from neuroeco.presentation.experiment import experiment_evaluate, experiment_train
 from neuroeco.presentation.inspector import SessionInfo
 from neuroeco.presentation.pilot_i2 import pilot_i2
 from neuroeco.presentation.pilot_p0b import pilot_p0b
@@ -60,6 +61,10 @@ pilot_app.command("p0b")(pilot_p0b)  # F6 (decision A3, O4)
 pilot_app.command("p2")(pilot_p2)  # F6 (ADR-035)
 pilot_app.command("p2-decide")(pilot_p2_decide)  # F6 (ADR-035)
 app.command("train")(train_command)  # F6 (ADR-027)
+experiment_app = typer.Typer(help="Formal experiments (F8).", no_args_is_help=True)
+app.add_typer(experiment_app, name="experiment")
+experiment_app.command("train")(experiment_train)
+experiment_app.command("evaluate")(experiment_evaluate)
 
 USER_ERRORS = (ConfigError, ConfigurationError, InitializationError, ValueError)
 

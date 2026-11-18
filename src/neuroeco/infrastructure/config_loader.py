@@ -27,6 +27,7 @@ from neuroeco.application.configs import (
     ResolvedConfig,
     RuleParams,
 )
+from neuroeco.application.experiment import Protocol
 from neuroeco.application.training import TrainingSpec
 from neuroeco.domain.params import WorldParams
 
@@ -160,6 +161,11 @@ def load_config(config_dir: Path, scenario: str, overrides: Sequence[str] = ()) 
 
 def load_p0_spec(path: Path) -> P0Spec:
     return build_dataclass(P0Spec, read_yaml(path), path.stem)
+
+
+def load_protocol(path: Path) -> Protocol:
+    """Pre-registered protocol of the formal experiments (F7)."""
+    return _build_spec(Protocol, path)
 
 
 def load_p0b_spec(path: Path) -> P0bSpec:
