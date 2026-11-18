@@ -32,6 +32,7 @@ GENERATION_COLUMNS = (
     "fitness_mean",
     "fitness_median",
     "fitness_std",
+    "zero_share",
     "diversity",
     "best_norm",
     "best_drift",

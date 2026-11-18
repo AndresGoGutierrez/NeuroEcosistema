@@ -57,6 +57,7 @@ decisión se registra como un ADR (*Architecture Decision Record*) con la planti
 | [020](ADR-020-p1-ecological-calibration.md) | Calibración ecológica (P1) |
 | [033](ADR-033-p1-operational-definitions.md) | Definiciones operativas de la calibración P1 |
 | [034](ADR-034-p1-unmet-class-b-criteria.md) | Criterios B no cumplidos en P1 (B3 en C, B4 (ii)) y congelamiento |
+| [035](ADR-035-p2-p3-operational-definitions.md) | Definiciones operativas de P2 y P3 (σ, G, curriculum, Δ, θ, R) |
 | [012](ADR-012-reference-policies.md) | Políticas de referencia, variantes y sondas |
 | [014](ADR-014-metric-definitions.md) | Definición de las métricas |
 | [017](ADR-017-c1-c3-statistical-analysis.md) | Análisis de C1 y C3 |

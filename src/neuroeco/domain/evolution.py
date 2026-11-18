@@ -50,6 +50,7 @@ class GenerationSummary:
     fitness_mean: float
     fitness_median: float
     fitness_std: float
+    zero_share: float  # share of genomes with fitness 0 (curriculum rule, ADR-026)
     diversity: float  # mean distance of the genomes to their centroid
     best_norm: float  # ||w|| of the best genome
     best_drift: float  # ||w - w0|| of the best genome, w0 = its generation-0 ancestor
@@ -92,6 +93,7 @@ class GeneticAlgorithm:
             fitness_mean=float(fitness.mean()),
             fitness_median=float(np.median(fitness)),
             fitness_std=float(fitness.std()),
+            zero_share=float((fitness == 0.0).mean()),
             diversity=float(np.linalg.norm(self.population - centroid, axis=1).mean()),
             best_norm=float(np.linalg.norm(self.population[best])),
             best_drift=float(
