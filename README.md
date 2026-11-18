@@ -21,7 +21,10 @@ del proyecto y no se incluye en este repositorio. Las secciones de la propuesta 
 | F3 | Estadística: métodos de ADR-013, ADR-014 y ADR-017 y pruebas de cobertura | Completada |
 | F4 | Calibración ecológica (piloto P1) y congelamiento del entorno | Cerrada (`env-frozen-v1`) |
 | F5 | Redes: MLP, inicialización (I1, I2), política neuronal, ablación y modelos guardados | Cerrada |
-| F6–F9 | Neuroevolución, protocolo, experimentos, entregables | Pendientes |
+| F6 | Neuroevolución (algoritmo genético, entrenamiento paralelo) y pilotos P0b, P2, P3 | Cerrada |
+| F7 | Protocolo prerregistrado | Cerrada (`protocol-v1`) |
+| F8 | Experimentos formales: 80 ejecuciones, evaluación TEST y análisis | Cerrada |
+| F9 | Informe, bitácora, declaración de IA, reproducción y demo | Ver [phase_gates.md](docs/phase_gates.md) |
 
 El plan completo y los criterios de cierre de cada fase están en
 [docs/decisions/ADR-024-phase-plan-and-gates.md](docs/decisions/ADR-024-phase-plan-and-gates.md)
@@ -51,6 +54,20 @@ uv run ruff format --check . # formato
 uv run lint-imports          # contratos de Clean Architecture
 uv run pytest                # pruebas
 ```
+
+## Uso
+
+```bash
+uv run neuroeco run --scenario A                                 # un episodio con reglas
+uv run neuroeco view --scenario A --prey model:<archivo.npz>     # visor con una red entrenada
+uv run neuroeco experiment train --stop-at AAAA-MM-DDTHH:MM      # campaña formal (reanudable)
+uv run neuroeco experiment evaluate                              # prueba en semillas TEST
+uv run neuroeco experiment analyze                               # tablas y figuras de C1–C3
+```
+
+Los resultados de F8 están en `results/experiments/f8/` (modelos seleccionados en
+`runs/<ejecución>/selected.npz`; tablas en `analysis/tables.md`). Informe final:
+[docs/report.md](docs/report.md); demo: [docs/demo.md](docs/demo.md).
 
 ## Estructura
 
@@ -86,3 +103,6 @@ solo puede importar la biblioteca estándar y `numpy`. Se verifica con `lint-imp
 - [Arquitectura](docs/architecture.md)
 - [Registro de cierre de fases](docs/phase_gates.md)
 - [Declaración de uso de IA generativa](docs/ai_usage_statement.md)
+- [Informe final](docs/report.md)
+- [Protocolo experimental](docs/experimental_protocol.md)
+- [Informe de pilotos](docs/pilot_report.md)

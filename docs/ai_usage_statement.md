@@ -136,3 +136,34 @@ y con enumeraciones ingenuas independientes; dualidad prueba-intervalo; reproduc
 bootstrap; protocolo de cobertura ejecutado sin cambios tras su registro; `ruff`,
 `lint-imports` (4 contratos) y `pytest` (438 pruebas) antes de cada commit; CI en Ubuntu y
 Windows después de cada tarea.
+
+### 2026-11-16 a 2026-11-18: F4 a F9 (calibración, redes, neuroevolución, experimentos, informe)
+
+**Uso:** desde el 2026-11-17 el autor delegó en Claude Code la ejecución autónoma del proyecto
+(decisiones técnicas y de los pilotos registradas como "tomada por Claude por delegación expresa
+del autor"). La IA implementó la máquina de estados de P1, las redes (F5), el algoritmo genético,
+el entrenamiento paralelo, los pilotos P0b/P2/P3, la campaña formal reanudable, la evaluación y
+el análisis; redactó ADR-033 a ADR-037, el protocolo y este informe.
+
+**Decisiones reservadas al autor:** autorizar ejecuciones reales de P1 (ejecutadas por el autor
+con `--author-authorized`), el congelamiento del entorno (`env-frozen-v1`), la actualización de
+pruebas tras el congelamiento, el tag `protocol-v1` y el lanzamiento de la campaña formal F8
+(ejecutada por el autor en su máquina).
+
+**Errores detectados y corregidos durante la ejecución:**
+
+- Una iteración de P1 se lanzó antes de revisar un CI fallido (fuga de la decisión real hacia
+  configuraciones sintéticas de prueba); se corrigió el aislamiento y se informó al autor.
+- Los procesos de trabajo no limitaban BLAS a un hilo (NumPy debía importarse antes de
+  `threadpool_limits`); detectado por la verificación del manifiesto.
+- El análisis fallaba con n = 2 (sin intervalo exacto del 95 %) y escribía archivos desde la
+  capa `analysis`, contra un contrato de arquitectura; corregidos antes del commit.
+- El `.gitignore` excluía los directorios `runs/` de los resultados; se incluyeron de forma
+  explícita como evidencia.
+- En el borrador del informe, la descripción de los sensores y del currículo no coincidía con
+  ADR-007 y ADR-026; se corrigió contrastando con los ADR antes del commit.
+
+**Validaciones:** 1063 pruebas e integración continua en Ubuntu y Windows en cada cambio de
+código; DET-3 (resultados idénticos con 0, 1 y 4 procesos); protocolo prerregistrado y
+etiquetado antes de los datos formales; análisis regenerable desde `test_episodes.csv`;
+reproducción en un clon limpio (`docs/phase_gates.md`, F9).

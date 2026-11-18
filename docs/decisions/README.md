@@ -10,7 +10,7 @@ decisión se registra como un ADR (*Architecture Decision Record*) con la planti
 - ADR-025 a ADR-030 registran decisiones del diseño consolidado que no tenían número D.
 - ADR-031 en adelante registran decisiones tomadas durante la implementación, con aprobación
   del autor.
-- Las decisiones de los ejes **Interpretación** y **Mejora** se añadirán con los resultados (F9).
+- ADR-036 y ADR-037 cubren los ejes **Interpretación** y **Mejora** con los resultados de F8.
 - La evidencia de muchos ADR es todavía analítica; cada uno indica qué evidencia empírica falta
   y en qué fase se obtiene.
 
@@ -69,10 +69,18 @@ decisión se registra como un ADR (*Architecture Decision Record*) con la planti
 | [028](ADR-028-seed-scheme.md) | Esquema de semillas |
 
 ### Interpretación
-*¿Qué muestran las métricas? ¿Qué resultados contradicen las expectativas?* — Pendiente (F9).
+*¿Qué muestran las métricas? ¿Qué resultados contradicen las expectativas?*
+
+| ADR | Decisión |
+|---|---|
+| [036](ADR-036-interpretation-of-f8-results.md) | Interpretación de los resultados de F8 |
 
 ### Mejora
-*¿Qué decisión se modificaría primero y con qué evidencia?* — Pendiente (F9).
+*¿Qué decisión se modificaría primero y con qué evidencia?*
+
+| ADR | Decisión |
+|---|---|
+| [037](ADR-037-first-improvement.md) | Primera mejora: presupuesto y oponentes de entrenamiento de la presa |
 
 ### Ingeniería y reproducibilidad
 
