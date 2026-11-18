@@ -169,3 +169,30 @@ Valores congelados (`env-frozen-v1`, ADR-034): `plant_energy` 30.0, `regrow_dela
 0.7 (depredador). La confirmación cumple toda la clase A; B3 en C y B4 (ii) quedan como
 incumplimientos aceptados en ADR-034.
 
+## P0b: costo del forward de la red y aceleración en paralelo (F6)
+
+Medición tras O1 con la metodología O4 (`configs/pilots/p0b.yaml`, `results/pilots/p0b/`):
+celdas en orden aleatorio entrelazado (5 rondas), calentamiento por celda, plan de energía
+registrado ("Turbo") y BLAS a un hilo en todos los procesos (ADR-016). Las redes son aleatorias
+(`prey_base`, `predator_base`); el veredicto A4 de P0 no se vuelve a decidir aquí.
+
+| Celda (presas/depredadores) | Reglas (µs/paso, mediana) | Redes (µs/paso, mediana) | Costo del forward |
+|---|---|---|---|
+| 25/3 (escenario A congelado) | 382.7 | 392.2 | 9.6 µs/paso |
+| 50/8 (referencia de P0) | 517.1 | 551.4 | 34.3 µs/paso |
+
+- El forward de la red es una fracción pequeña del paso (2–7 %): el costo lo domina la
+  simulación (percepción y reglas), como anticipaba A3.
+- Con O1, la referencia 50/8 queda en 517 µs frente a 833 µs (P0) y 574 µs (ejecución anterior):
+  la variabilidad entre ejecuciones sigue siendo grande y la comparación es solo informativa.
+
+| Workers | 1 | 2 | 4 | 8 | 16 | 24 | 32 |
+|---|---|---|---|---|---|---|---|
+| Aceleración (mediana de 3) | 1.00 | 1.73 | 2.83 | 4.52 | 6.40 | 7.54 | 7.81 |
+| Eficiencia | 1.00 | 0.87 | 0.71 | 0.56 | 0.40 | 0.31 | 0.24 |
+
+Lote de 64 episodios de entrenamiento de presa (32 genomas × 2). Con lotes tan pequeños el
+reparto y el arranque de cada tarea pesan; más allá de 16 workers la ganancia es marginal en
+esta máquina (32 procesadores lógicos). P3 mide la duración real de una ejecución completa con
+el número de workers elegido.
+
