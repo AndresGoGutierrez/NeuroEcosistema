@@ -160,4 +160,12 @@ Cada paso real añade aquí una fila con su resultado y la decisión que siguió
 | Iteración 6 (etapa C, n_pred,C = 6) | `iterations/006.yaml` | `cd4d954` | `2ed02dc` | **S_C cumplido** | B3 en C | Seguir requiere una decisión `b_criteria` del autor (P1-18). **Decisión 3 del autor** (`p1_decisions/003.yaml`): repetir la etapa C con n_pred,C = 5 | 690 episodios, sin A2. Supervivencia C 0.203 (B1 pasa por poco); A4 (d) 716 frente a 654 capturas; A6 (C, A) δ = −0.90, IC BCa [−0.99, −0.68]. B3 en C: 43/180 (83 depredadores censurados antes del umbral; mediana de pasos 457 < T_max/2 porque las presas se agotan). Sin alertas C (C2: 71 de 716 capturas tempranas, ≤ 1/10) |
 | Iteración 7 (etapa C, n_pred,C = 5) | `iterations/007.yaml` | `a1d3078` | `229ecd2` | **S_C cumplido** | B3 en C (por un depredador) | **Decisión 4** (`p1_decisions/004.yaml`, tomada por Claude por delegación expresa del autor): evaluación de entrada; B3 aceptado pendiente de ADR | 690 episodios, sin A2. Supervivencia C 0.241; A4 (d) 702 frente a 654 capturas; A6 (C, A) δ = −0.81, IC BCa [−0.92, −0.57]; mediana de pasos 898. B3 en C: 37/75 = 0.493 (umbral 1/2). Sin alertas C |
 | Evaluación de entrada (estado E) | valores de `iterations/007.yaml` | `324856d` (decisión 4) | `9fee669` | **Toda la clase A cumplida** en las 35 condiciones | B3 en C, B4 (ii) (ya aceptados en las decisiones 1 y 4) | `author_authorization_required` | 1050 episodios, sin A2; ninguna alerta C. Siguiente: revisión de la entrada (decisión 5) y confirmación con los grupos 20/21/22 |
-| Confirmación (grupos 20/21/22) | valores de `iterations/007.yaml` | `85db573` (decisión 5) | commit que añade esta fila | **Toda la clase A cumplida** con semillas nuevas | B3 en C (62/125 = 0.496), B4 (ii) (A −0.041, B −0.140) | CONF completada | 1750 episodios en 483 s, ejecutados por el autor con `--author-authorized`; sin A2; ninguna alerta C. Los B no cumplidos se deciden en ADR-034 |
+| Confirmación (grupos 20/21/22) | valores de `iterations/007.yaml` | `85db573` (decisión 5) | `ae70358` | **Toda la clase A cumplida** con semillas nuevas | B3 en C (62/125 = 0.496), B4 (ii) (A −0.041, B −0.140) | CONF completada | 1750 episodios en 483 s, ejecutados por el autor con `--author-authorized`; sin A2; ninguna alerta C. Los B no cumplidos se deciden en ADR-034 |
+
+### Resultado de P1
+
+Valores congelados (`env-frozen-v1`, ADR-034): `plant_energy` 30.0, `regrow_delay` 50, `n_plants`
+40 en A y C y 4 en B, `n_predators` 3 en A y B y 5 en C, `p_flee` 0.2, `u_cruise` 0.3 (presa) y
+0.7 (depredador). La confirmación cumple toda la clase A; B3 en C y B4 (ii) quedan como
+incumplimientos aceptados en ADR-034.
+

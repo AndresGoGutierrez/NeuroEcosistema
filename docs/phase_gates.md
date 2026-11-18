@@ -291,7 +291,7 @@ local, más que los ≈ 80 s estimados en ADR-032; no cambia ningún parámetro 
 
 - **Inicio:** 2026-11-15, con autorización expresa del autor limitada a T0; después, T0b, T1, T2,
   T3, T3b, T3c y T4 (en los incrementos I1–I4), cada una autorizada por separado.
-- **Estado:** 🔄 En curso. T0, T0b, T1, T2, T3 y T3b aprobadas por el autor (T2, T3 y T3b tras
+- **Estado:** ✅ Cerrada el 2026-11-17 (registro de cierre al final de esta sección). T0, T0b, T1, T2, T3 y T3b aprobadas por el autor (T2, T3 y T3b tras
   una auditoría, con observaciones); T3c (correcciones de la auditoría de T3b) completada y
   validada en las comprobaciones automáticas (CI `43797566961` de `bb82864`, correcto en Ubuntu y
   Windows). T4 (evaluación de criterios, comando `pilot p1-criteria` y selección de P1-17)
@@ -304,8 +304,8 @@ local, más que los ≈ 80 s estimados en ADR-032; no cambia ningún parámetro 
   hallazgos críticos; sus hallazgos importantes se resolvieron en T4d (D-T4d-1 a D-T4d-5; CI
   `44152672597` de `4d922ac`, correcto en Ubuntu y Windows, 949 pruebas). T5-0 (preparación
   operativa, sin episodios) reservó `results/pilots/p1` con las huellas de referencia
-  ([p1_runbook.md](p1_runbook.md)). La ejecución de episodios reales de P1 (T5-1 en adelante)
-  requiere la autorización expresa del autor para cada paso.
+  ([p1_runbook.md](p1_runbook.md)). T5-1 a T5-12 ejecutaron la calibración real: 7 iteraciones,
+  2 rondas, evaluación de entrada y confirmación (registro en [pilot_report.md](pilot_report.md)).
 - **Criterio de cierre (ADR-024):** criterios de ADR-020 (clase A completa en la confirmación;
   cada B cumplido o aceptado mediante ADR; cada C investigado y documentado), `p_flee` y
   `u_cruise` ajustados y congelados (ADR-012) y etiqueta `env-frozen-v1`.
@@ -627,7 +627,10 @@ Los resultados se usan solo si pertenecen a su especificación registrada (SHA-2
 | T5-1 iteración 1 (A): registro, dos rechazos de la verificación previa por filtros LFS de la máquina, resultados | `9c22a8c`, `80e71b3`, `923d15e`, `19f6503` | `44157776015` ✅ (registro) |
 | T5-2 ronda 1 (rejillas y A_rev) | `4627c71`, `cfbfb65`, `fb2cb77`, `c1ab495` | `44161743994` ✅ (registro) |
 | T5-3 ronda 2 (intento interrumpido recuperado con D18; rejillas sin cambios: T_fin) | `be3654c`, `1051923`, `2c2332b`, `5dd1229` | `44164747738` ✅ (registro) |
-| T5-4 iteración 2 (B): registro | commit que añade esta fila | CI de su publicación |
+| T5-4 a T5-6 etapa B: iteraciones 2 (N_B 15), 3 (7) y 4 (4, S_B cumplido) | `ffae772`, `e3e12be`, `ee1fdfa`, `ae46cb7`, `0bdb66d`, `d0e8a45` | `44168290907`, `44171135004`, `44173808724` ✅ (registros) |
+| T5-7 a T5-9 etapa C: decisión 1; iteraciones 5 (n_pred,C 8), 6 (6; un intento interrumpido recuperado con D18) y 7 (5); decisiones 2 y 3; corrección del aislamiento de las pruebas | `797259f`, `23deea7`, `113342a`, `cd4d954`, `bef5b47`, `2ed02dc`, `a1d3078`, `229ecd2` | `44177087773` ❌ (aislamiento de las pruebas, corregido en `23deea7`), `44180620464` ✅, `44201206121` ✅ |
+| T5-10 a T5-12 decisión 4, evaluación de entrada, decisión 5 y confirmación | `324856d`, `9fee669`, `85db573`, `ae70358` | `[skip ci]` (solo datos, a petición del autor) |
+| T5-13 congelamiento: valores finales, ADR-034, prueba de P1-2 y 6 pruebas cerradas autorizadas (P1-23) | commit que añade esta fila | CI de su publicación |
 
 **Incidencias durante F4:**
 
@@ -658,3 +661,30 @@ Los resultados se usan solo si pertenecen a su especificación registrada (SHA-2
   de línea y añade el caso contrario (blob CRLF bajo un atributo `text`), para que no dependa del
   sistema operativo; su CI `43797566961` pasó en Ubuntu y en Windows (693 pruebas en cada uno).
   El repositorio real no tiene blobs con CRLF.
+
+**Registro de cierre de F4 (2026-11-17):**
+
+| Criterio de cierre (ADR-024, ADR-020) | Evidencia | Estado |
+|---|---|---|
+| Clase A completa en la confirmación | `results/pilots/p1/confirmation/evaluation/criteria.csv` (grupos 20/21/22, 1750 episodios, sin A2) | ✅ |
+| Cada B cumplido o aceptado mediante ADR | B3 en C y B4 (ii) aceptados en [ADR-034](decisions/ADR-034-p1-unmet-class-b-criteria.md); el resto cumplidos | ✅ |
+| Cada C investigado y documentado | Ninguna alerta C en la entrada ni en la confirmación; alerta C2 de la iteración 5 desaparecida con n_pred,C ≤ 6 | ✅ |
+| `p_flee` y `u_cruise` ajustados y congelados | Rondas 1 y 2: `p_flee` 0.2, `u_cruise` 0.3 (presa) y 0.7 (depredador) en `configs/baselines.yaml` | ✅ |
+| Valores ecológicos congelados | `configs/scenarios.yaml`: N_B = 4, n_pred,C = 5; A sin cambios | ✅ |
+| Etiqueta `env-frozen-v1` | Sobre el commit de congelamiento, tras su CI en verde | ✅ |
+
+- **Autorizaciones del autor:** cada paso real de T5 hasta la iteración 4 y la decisión 1; las
+  decisiones 2 y 3; la delegación expresa de sus decisiones en Claude (decisiones 4 y 5 y
+  ADR-034); la ejecución de la confirmación con `--author-authorized`; el congelamiento y la
+  etiqueta; la actualización de las 6 pruebas cerradas que fijaban los valores provisionales
+  (P1-23).
+- **Pruebas cerradas cambiadas:** la de P1-2 (ahora `test_base_configuration_matches_the_frozen_p1_values`)
+  y, con autorización P1-23, `test_policy_factory_builds_the_expected_types` (aceleración de crucero
+  congelada) y las de `test_p1_spec_loader.py` que reproducen la configuración real (instantánea
+  `FROZEN`). Ninguna se debilitó: comprueban lo mismo contra los valores congelados.
+- **Incidencias de T5:** dos rechazos de la verificación previa por filtros LFS de la máquina; dos
+  interrupciones sin episodios recuperadas con D18 (una manual, otra "Illegal instruction" no
+  reproducible); una iteración ejecutada antes de comprobar un CI que falló por aislamiento de
+  las pruebas (corregido; el código de producción no cambió).
+- **Siguiente fase:** F5 (redes), que solo puede empezar sobre `env-frozen-v1`.
+

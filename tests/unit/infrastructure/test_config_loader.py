@@ -33,11 +33,19 @@ def edit(path: Path, change) -> None:
     path.write_text(yaml.safe_dump(content), encoding="utf-8")
 
 
-def test_base_configuration_matches_the_approved_provisional_values() -> None:
+def test_base_configuration_matches_the_frozen_p1_values() -> None:
+    """P1-2: replaces the F1 test of the provisional values at the freeze (ADR-033, ADR-034).
+
+    Stage A kept the provisional world, so scenario A still equals ``PROVISIONAL_WORLD``.
+    """
     config = load_config(CONFIGS, "A")
     assert config.world == PROVISIONAL_WORLD
     assert config.project_seed == 151810796106167051982782525292607188790
-    assert config.rules.prey.flee_threshold == 0.3
+    assert config.rules.prey.flee_threshold == 0.2
+    assert config.rules.prey.cruise_fraction == 0.3
+    assert config.rules.predator.cruise_fraction == 0.7
+    assert load_config(CONFIGS, "B").world.n_plants == 4
+    assert load_config(CONFIGS, "C").world.n_predators == 5
     assert all(check.satisfied for check in calibration_checks(config.world))
 
 

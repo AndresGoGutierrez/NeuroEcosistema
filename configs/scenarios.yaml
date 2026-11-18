@@ -1,8 +1,8 @@
 # Experimental scenarios (ADR-029): A is the reference; B and C change exactly one factor.
-# PROVISIONAL pre-P1 values (decision A5); P1 calibrates them (ADR-020).
+# FROZEN by P1 (ADR-020, ADR-033; iteration 007, confirmed): env-frozen-v1.
 scenarios:
   A: {}                  # abundance: base values
   B:                     # scarcity: lower plant density only
-    n_plants: 15
+    n_plants: 4
   C:                     # predation pressure: more predators only
-    n_predators: 8
+    n_predators: 5

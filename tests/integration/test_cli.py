@@ -65,7 +65,8 @@ def test_policy_factory_builds_the_expected_types() -> None:
     assert isinstance(build_policy("rules", "predator", config), RuleBasedPredatorPolicy)
     assert isinstance(build_policy("random", "prey", config), RandomPolicy)
     probe = build_policy("straight_cruise", "predator", config)
-    assert isinstance(probe, ConstantPolicy) and probe.throttle == 0.0  # cruise 0.5
+    assert isinstance(probe, ConstantPolicy)
+    assert probe.throttle == pytest.approx(0.4)  # frozen cruise 0.7 (ADR-034): 2 * 0.7 - 1
     with pytest.raises(ValueError):
         build_policy("rules", "plant", config)
 

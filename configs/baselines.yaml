@@ -1,8 +1,8 @@
 # Rule-based reference policies (ADR-012).
-# PROVISIONAL pre-P1 values (decision A5); P1 tunes them with a small grid and freezes them.
+# FROZEN by P1 (ADR-012, ADR-033; rounds 01-02, confirmed): env-frozen-v1.
 rules:
   prey:
-    flee_threshold: 0.3    # flee when predator1_proximity > 0.3 (distance < 0.7 * R_v)
-    cruise_fraction: 0.5   # speed when nothing is perceived, as a fraction of v_max
+    flee_threshold: 0.2    # flee when predator1_proximity > 0.2 (distance < 0.8 * R_v)
+    cruise_fraction: 0.3   # speed when nothing is perceived, as a fraction of v_max
   predator:
-    cruise_fraction: 0.5
+    cruise_fraction: 0.7

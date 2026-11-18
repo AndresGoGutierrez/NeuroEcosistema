@@ -5,9 +5,9 @@
 # changing it invalidates every pilot, run and result derived from it.
 project_seed: 151810796106167051982782525292607188790
 
-# World parameters. PROVISIONAL pre-P1 values (decision A5, docs/phase_gates.md): they satisfy
-# the invariants K1-K4 and the calibration targets E1, E2, E5, and exist only to run and test
-# F1. P1 (F4) calibrates and freezes the definitive values (ADR-020).
+# World parameters. FROZEN by P1 (F4, ADR-020, ADR-033): calibration iteration 007 confirmed with
+# seed groups 20/21/22; tag env-frozen-v1. They satisfy K1-K4 and E1, E2, E5. Stage A kept the
+# provisional plant_energy, regrow_delay and n_plants.
 world:
   size: 150.0
   t_max: 1000

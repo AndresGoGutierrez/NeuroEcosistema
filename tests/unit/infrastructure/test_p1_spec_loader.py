@@ -46,6 +46,15 @@ PROVISIONAL = CandidateValues(
     prey_cruise_fraction=0.5,
     predator_cruise_fraction=0.5,
 )
+# The values frozen by P1 (iteration 007, ADR-034), reproduced by the real configs.
+FROZEN = dataclasses.replace(
+    PROVISIONAL,
+    n_plants_b=4,
+    n_predators_c=5,
+    prey_flee_threshold=0.2,
+    prey_cruise_fraction=0.3,
+    predator_cruise_fraction=0.7,
+)
 SYNTHETIC = {
     "pilot": "P1",
     "blocks": {
@@ -179,10 +188,10 @@ def test_invalid_iteration_specification_names_the_file(tmp_path) -> None:
 
 
 @pytest.mark.parametrize("scenario", SCENARIOS)
-def test_provisional_candidate_preserves_the_resolved_configuration(scenario: str) -> None:
-    """The candidate of the provisional values reproduces A, B and C exactly, hash included."""
+def test_frozen_candidate_preserves_the_resolved_configuration(scenario: str) -> None:
+    """The candidate of the frozen values reproduces A, B and C exactly, hash included."""
     plain = load_config(CONFIGS, scenario)
-    overridden = load_config(CONFIGS, scenario, scenario_overrides(PROVISIONAL, scenario))
+    overridden = load_config(CONFIGS, scenario, scenario_overrides(FROZEN, scenario))
     assert overridden == plain
     assert overridden.config_hash == plain.config_hash
 
@@ -190,9 +199,7 @@ def test_provisional_candidate_preserves_the_resolved_configuration(scenario: st
 @pytest.mark.parametrize("scenario", ["A", "B"])
 def test_no_predators_changes_only_the_number_of_predators(scenario: str) -> None:
     plain = load_config(CONFIGS, scenario)
-    batch = load_config(
-        CONFIGS, scenario, condition_overrides(PROVISIONAL, scenario, "no_predators")
-    )
+    batch = load_config(CONFIGS, scenario, condition_overrides(FROZEN, scenario, "no_predators"))
     assert batch.world == dataclasses.replace(plain.world, n_predators=0)
     assert batch.rules == plain.rules
     assert batch.config_hash != plain.config_hash
