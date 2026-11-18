@@ -20,7 +20,7 @@ from typing import Any
 import yaml
 
 from neuroeco.application.calibration import IterationSpec, P1Spec, RoundSpec
-from neuroeco.application.configs import P0Spec, ResolvedConfig, RuleParams
+from neuroeco.application.configs import P0Spec, ReferenceSpec, ResolvedConfig, RuleParams
 from neuroeco.domain.params import WorldParams
 
 BASE_FILE = "base.yaml"
@@ -153,6 +153,11 @@ def load_config(config_dir: Path, scenario: str, overrides: Sequence[str] = ()) 
 
 def load_p0_spec(path: Path) -> P0Spec:
     return build_dataclass(P0Spec, read_yaml(path), path.stem)
+
+
+def load_reference_spec(path: Path) -> ReferenceSpec:
+    """I2 reference set of F5 (ADR-018)."""
+    return _build_spec(ReferenceSpec, path)
 
 
 def check_unique_seed_groups(declared: Mapping[str, int]) -> None:

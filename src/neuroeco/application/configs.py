@@ -76,3 +76,27 @@ class ResolvedConfig:
     world: WorldParams
     rules: RuleParams
     config_hash: str
+
+
+@dataclass(frozen=True)
+class ReferenceSpec:
+    """I2 of ADR-018: reference observations and the initial-saturation thresholds (F5)."""
+
+    pilot: str
+    seed_group: int
+    scenarios: tuple[str, ...]
+    episodes: int
+    stride: int
+    genomes: int
+    s1_max: float
+    s2_max: float
+    s3_min: float
+
+    def __post_init__(self) -> None:
+        if not self.scenarios or len(set(self.scenarios)) != len(self.scenarios):
+            raise ValueError("scenarios must be a non-empty list without repetitions")
+        for name in ("episodes", "stride", "genomes"):
+            if getattr(self, name) < 1:
+                raise ValueError(f"{name} must be >= 1")
+        for name in ("s1_max", "s2_max", "s3_min"):
+            _check_fraction(name, getattr(self, name))

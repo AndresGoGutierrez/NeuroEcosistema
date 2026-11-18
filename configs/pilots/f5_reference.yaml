@@ -1,0 +1,12 @@
+# F5, I2 of ADR-018: reference observations for the initial-saturation check of the networks.
+# Episodes of the rule-based policies in the frozen scenarios (env-frozen-v1), PILOT seeds; one of
+# every `stride` rows of living agents is kept. 100 random genomes are drawn from GA_INIT.
+pilot: F5-I2
+seed_group: 2             # ADR-028; 0 exploratory, 1 P0, 10-32 P1
+scenarios: [A, B, C]
+episodes: 10              # per scenario
+stride: 10                # one of every 10 samples (ADR-018)
+genomes: 100
+s1_max: 0.10              # S1: median per layer of the fraction of (sample, neuron) with |a| > 0.95
+s2_max: 0.05              # S2: median per layer of the fraction of neurons saturated in >= 90 %
+s3_min: 0.10              # S3: median of the standard deviation of each output

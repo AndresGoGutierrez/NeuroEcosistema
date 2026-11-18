@@ -23,6 +23,7 @@ import numpy as np
 from neuroeco.application.evaluation import EpisodeIdentity, EpisodeResult, run_episode
 from neuroeco.application.seeding import SeedRegistry
 from neuroeco.domain.actions import decode_actions
+from neuroeco.domain.neural import NeuralNetwork
 from neuroeco.domain.params import SpeciesParams, WorldParams
 from neuroeco.domain.perception import PREDATOR_SCHEMA, PREY_SCHEMA, InputSchema
 from neuroeco.domain.policies import Policy
@@ -206,6 +207,8 @@ class AgentInspection:
     turn: float | None
     speed: float | None
     action_applied: bool | None  # alive when step decision_step started
+    # hidden-layer outputs of a neural policy for this decision (F5); empty otherwise
+    activations: tuple[tuple[float, ...], ...] = ()
 
 
 def _schema_and_params(species: str, params: WorldParams) -> tuple[InputSchema, SpeciesParams]:
@@ -214,8 +217,19 @@ def _schema_and_params(species: str, params: WorldParams) -> tuple[InputSchema, 
     return PREDATOR_SCHEMA, params.predator
 
 
-def inspect_agent(frame: Frame, params: WorldParams, species: str, index: int) -> AgentInspection:
-    """Inspector values of one agent, taken from the frame without recomputing anything."""
+def inspect_agent(
+    frame: Frame,
+    params: WorldParams,
+    species: str,
+    index: int,
+    network: NeuralNetwork | None = None,
+) -> AgentInspection:
+    """Inspector values of one agent, taken from the frame.
+
+    With the ``network`` of a neural policy, its hidden activations for the recorded
+    observations are recomputed (the forward pass is deterministic, so they are the ones of the
+    decision, up to rounding); its output must match the recorded raw action.
+    """
     view = frame.species(species)
     if not 0 <= index < view.size:
         raise IndexError(f"{species} index {index} out of range [0, {view.size})")
@@ -226,8 +240,16 @@ def inspect_agent(frame: Frame, params: WorldParams, species: str, index: int) -
     decision = frame.decision(species)
     inputs: tuple[tuple[str, float], ...] = ()
     raw = turn = speed = applied = None
+    activations: tuple[tuple[float, ...], ...] = ()
     if decision is not None:
         row = decision.observations[index]
+        if network is not None:
+            layers = network.activations(row[np.newaxis, :])
+            # One row and the whole batch may differ in the last bit (BLAS blocking), so the
+            # check is to 1e-12: enough to reject a network that did not take the decision.
+            if not np.allclose(layers[-1][0], decision.raw_actions[index], rtol=0, atol=1e-12):
+                raise ValueError("the network does not reproduce the recorded action")
+            activations = tuple(tuple(float(v) for v in a[0]) for a in layers[:-1])
         inputs = tuple((name, float(value)) for name, value in zip(schema.names, row, strict=True))
         raw_row = decision.raw_actions[index : index + 1]
         turns, speeds = decode_actions(raw_row, species_params)
@@ -254,6 +276,7 @@ def inspect_agent(frame: Frame, params: WorldParams, species: str, index: int) -
         turn=turn,
         speed=speed,
         action_applied=applied,
+        activations=activations,
     )
 
 

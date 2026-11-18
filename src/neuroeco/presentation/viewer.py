@@ -24,6 +24,7 @@ import numpy as np
 import pygame
 
 from neuroeco.application.session import Frame, inspect_agent
+from neuroeco.domain.neural import NeuralNetwork
 from neuroeco.domain.params import WorldParams
 from neuroeco.presentation.inspector import (
     Selection,
@@ -136,6 +137,7 @@ class Viewer:
         fps: int = 30,
         exit_at_end: bool = False,
         event_source: EventSource | None = None,
+        networks: dict[str, NeuralNetwork] | None = None,
     ) -> None:
         if speed not in SPEEDS:
             raise ValueError(f"speed must be one of {SPEEDS}, got {speed}")
@@ -143,6 +145,7 @@ class Viewer:
             raise ValueError("fps must be >= 0 (0 = unlimited)")
         self.params = params
         self.info = info
+        self.networks = networks or {}  # species -> network of a neural policy (F5)
         self.controls = Controls(paused=paused, speed_index=SPEEDS.index(speed))
         self.selected: Selection | None = None
         self.frame: Frame | None = None
@@ -232,8 +235,13 @@ class Viewer:
         if self.selected is None:
             lines.append("click an agent to inspect it")
         else:
+            species = self.selected.species
             inspection = inspect_agent(
-                self.frame, self.params, self.selected.species, self.selected.index
+                self.frame,
+                self.params,
+                species,
+                self.selected.index,
+                self.networks.get(species),
             )
             lines += inspector_lines(inspection)
         return lines

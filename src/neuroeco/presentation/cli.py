@@ -26,6 +26,7 @@ from neuroeco.bootstrap import (
     build_policy,
     build_runtime,
 )
+from neuroeco.domain.neural import NeuralPolicy
 from neuroeco.domain.params import ConfigurationError
 from neuroeco.domain.simulator import PHASES
 from neuroeco.domain.state import InitializationError
@@ -38,6 +39,7 @@ from neuroeco.infrastructure.storage import (
     write_json,
 )
 from neuroeco.presentation.inspector import SessionInfo
+from neuroeco.presentation.pilot_i2 import pilot_i2
 from neuroeco.presentation.pilot_p1 import pilot_p1
 from neuroeco.presentation.pilot_p1_criteria import pilot_p1_criteria
 from neuroeco.presentation.pilot_p1_reserve import pilot_p1_reserve
@@ -50,6 +52,7 @@ pilot_app.command("p1")(pilot_p1)  # F4 T3 (ADR-033)
 pilot_app.command("p1-criteria")(pilot_p1_criteria)  # F4 T4-I3 (ADR-033, D1)
 pilot_app.command("p1-sequence")(pilot_p1_sequence)  # F4 T4b (ADR-033 P1-18, D-T4b-1)
 pilot_app.command("p1-reserve")(pilot_p1_reserve)  # F4 T4d (D-T4d-4)
+pilot_app.command("i2")(pilot_i2)  # F5 (ADR-018, I2)
 
 USER_ERRORS = (ConfigError, ConfigurationError, InitializationError, ValueError)
 
@@ -118,9 +121,9 @@ def main() -> None:
 @app.command()
 def run(
     scenario: Annotated[str, typer.Option(help="Scenario: A, B or C.")] = "A",
-    prey: Annotated[str, typer.Option(help=f"Prey policy: {', '.join(REFERENCE_POLICIES)}.")] = (
-        "rules"
-    ),
+    prey: Annotated[
+        str, typer.Option(help=f"Prey policy: {', '.join(REFERENCE_POLICIES)} or model:<file>.")
+    ] = ("rules"),
     predator: Annotated[str, typer.Option(help="Predator policy (same choices).")] = "rules",
     episode: Annotated[int, typer.Option(min=0, help="Episode index (seed item).")] = 0,
     overrides: Annotated[
@@ -169,9 +172,9 @@ def _utc_now() -> str:
 @app.command()
 def view(
     scenario: Annotated[str, typer.Option(help="Scenario: A, B or C.")] = "A",
-    prey: Annotated[str, typer.Option(help=f"Prey policy: {', '.join(REFERENCE_POLICIES)}.")] = (
-        "rules"
-    ),
+    prey: Annotated[
+        str, typer.Option(help=f"Prey policy: {', '.join(REFERENCE_POLICIES)} or model:<file>.")
+    ] = ("rules"),
     predator: Annotated[str, typer.Option(help="Predator policy (same choices).")] = "rules",
     episode: Annotated[int, typer.Option(min=0, help="Episode index (seed item).")] = 0,
     overrides: Annotated[
@@ -228,8 +231,19 @@ def view(
     viewer = None
     exit_code = 0
     try:
+        networks = {
+            species: policy.network
+            for species, policy in (("prey", prey_policy), ("predator", predator_policy))
+            if isinstance(policy, NeuralPolicy)
+        }
         viewer = Viewer(
-            config.world, info, paused=paused, speed=speed, fps=fps, exit_at_end=exit_at_end
+            config.world,
+            info,
+            paused=paused,
+            speed=speed,
+            fps=fps,
+            exit_at_end=exit_at_end,
+            networks=networks,
         )
         result = run_session(
             config.world, prey_policy, predator_policy, runtime.registry, identity, viewer

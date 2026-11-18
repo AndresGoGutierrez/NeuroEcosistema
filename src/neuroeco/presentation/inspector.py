@@ -140,4 +140,6 @@ def inspector_lines(view: AgentInspection) -> list[str]:
     lines.append(f"output    turn {view.raw_action[0]:+.4f}   throttle {view.raw_action[1]:+.4f}")
     lines.append(f"action    turn {view.turn:+.4f} rad   speed {view.speed:.4f}")
     lines.append("applied   yes" if view.action_applied else "applied   no (dead before the step)")
+    for number, layer in enumerate(view.activations, start=1):
+        lines.append(f"hidden {number}  " + " ".join(f"{v:+.2f}" for v in layer))
     return lines
