@@ -1,0 +1,99 @@
+{
+  "block": {
+    "block": "confirmation",
+    "iteration": 0,
+    "stage": "confirmation"
+  },
+  "command": [
+    "neuroeco",
+    "pilot",
+    "p1-criteria",
+    "--result",
+    "results/pilots/p1/confirmation/evaluation"
+  ],
+  "criteria_rows": 66,
+  "criteria_sha256": "8aecf7edce94325ca5c37198461e351fa6a30472979ea4d0925c9b8a521101d6",
+  "dependencies": {
+    "numpy": "2.5.4",
+    "pandas": "3.1.1",
+    "scipy": "1.18.1"
+  },
+  "fingerprint": {
+    "code": {
+      "analysis": "4f4803bc0058ca6609489f37fe0e292abaab364f5ebc3358d97d34d9c81d4419",
+      "simulation": "740004ac7be88fbde2b0a42ab0a770edf89d26d0d6a3e0213ed7cc8476b3c88b"
+    },
+    "environment": {
+      "byteorder": "little",
+      "dependencies": {
+        "numpy": "2.5.4",
+        "pandas": "3.1.1",
+        "pygame-ce": "2.5.8",
+        "pyyaml": "6.0.3",
+        "scipy": "1.18.1",
+        "threadpoolctl": "3.8.0",
+        "typer": "0.29.1"
+      },
+      "implementation": "cpython",
+      "machine": "AMD64",
+      "numpy_cpu_features": [
+        "AVX",
+        "AVX2",
+        "BMI",
+        "BMI2",
+        "CX16",
+        "F16C",
+        "FMA3",
+        "GFNI",
+        "LAHF",
+        "LZCNT",
+        "MMX",
+        "MOVBE",
+        "POPCNT",
+        "SSE",
+        "SSE2",
+        "SSE3",
+        "SSE41",
+        "SSE42",
+        "SSSE3",
+        "VAES",
+        "VPCLMULQDQ",
+        "X86_V2",
+        "X86_V3"
+      ],
+      "os": [
+        "Windows",
+        "11",
+        "10.0.26200"
+      ],
+      "platform": "win32",
+      "python": "3.12.14",
+      "thread_env": {
+        "MKL_NUM_THREADS": "1",
+        "OMP_NUM_THREADS": "1",
+        "OPENBLAS_NUM_THREADS": "1"
+      },
+      "uv_lock_sha256": "a1696c0b67e691962127862195bcae1ce0f93a8db41e69a6814b88cc52717a14"
+    }
+  },
+  "git": {
+    "head": "85db5730e876ab2b039fee90a6e59803e1754f99",
+    "remote_url": "https://github.com/AndresGoGutierrez/NeuroEcosistema.git",
+    "upstream": "origin/main",
+    "upstream_commit": "85db5730e876ab2b039fee90a6e59803e1754f99"
+  },
+  "input_files": {
+    "bootstrap_keys.csv": "b672e0a7f090fd4d68b8b98b25509d7a2b3050f71d07a735f238a6851819aa9d",
+    "episodes.csv": "2b1fe64e981fc6c2d5041126ea5a2b7ff0e88b43cbaee6cec9f259a9f002e716",
+    "provenance.json": "301af14d58b5e6f966b8570332fd3814ab7cc12880da1a576ba351273eb3d0e2"
+  },
+  "platform": "Windows-11-10.0.26200-SP0",
+  "python": "3.12.14",
+  "result_directory": "results/pilots/p1/confirmation/evaluation",
+  "schema": "neuroeco.p1-criteria-provenance/1",
+  "stage_requirements": {
+    "met": true,
+    "stage": "confirmation"
+  },
+  "timestamp_utc": "2026-11-18T00:25:31+00:00"
+}
