@@ -630,7 +630,7 @@ Los resultados se usan solo si pertenecen a su especificación registrada (SHA-2
 | T5-4 a T5-6 etapa B: iteraciones 2 (N_B 15), 3 (7) y 4 (4, S_B cumplido) | `ffae772`, `e3e12be`, `ee1fdfa`, `ae46cb7`, `0bdb66d`, `d0e8a45` | `44168290907`, `44171135004`, `44173808724` ✅ (registros) |
 | T5-7 a T5-9 etapa C: decisión 1; iteraciones 5 (n_pred,C 8), 6 (6; un intento interrumpido recuperado con D18) y 7 (5); decisiones 2 y 3; corrección del aislamiento de las pruebas | `797259f`, `23deea7`, `113342a`, `cd4d954`, `bef5b47`, `2ed02dc`, `a1d3078`, `229ecd2` | `44177087773` ❌ (aislamiento de las pruebas, corregido en `23deea7`), `44180620464` ✅, `44201206121` ✅ |
 | T5-10 a T5-12 decisión 4, evaluación de entrada, decisión 5 y confirmación | `324856d`, `9fee669`, `85db573`, `ae70358` | `[skip ci]` (solo datos, a petición del autor) |
-| T5-13 congelamiento: valores finales, ADR-034, prueba de P1-2 y 6 pruebas cerradas autorizadas (P1-23) | commit que añade esta fila | CI de su publicación |
+| T5-13 congelamiento: valores finales, ADR-034, prueba de P1-2 y 6 pruebas cerradas autorizadas (P1-23) | `83a25f5` (etiqueta `env-frozen-v1`) | `44209944570` ✅ (949 pruebas en Ubuntu y en Windows) |
 
 **Incidencias durante F4:**
 
@@ -687,4 +687,39 @@ Los resultados se usan solo si pertenecen a su especificación registrada (SHA-2
   reproducible); una iteración ejecutada antes de comprobar un CI que falló por aislamiento de
   las pruebas (corregido; el código de producción no cambió).
 - **Siguiente fase:** F5 (redes), que solo puede empezar sobre `env-frozen-v1`.
+
+## F5: Redes
+
+- **Inicio:** 2026-11-17, sobre `env-frozen-v1`, dentro de la delegación del autor para continuar
+  el proyecto de forma autónoma.
+- **Estado:** ✅ Cerrada el 2026-11-17.
+- **Criterio de cierre (ADR-024):** `NetworkSpec` rechaza < 2 capas ocultas; parámetros
+  482/178/434/154; I1 e I2; ablación de pesos; DET-4; rechazo de esquema distinto.
+- **Documentación:** [networks.md](networks.md).
+
+| Criterio | Evidencia | Estado |
+|---|---|---|
+| `NetworkSpec` rechaza < 2 capas ocultas | `test_spec_rejects_fewer_than_two_hidden_layers` | ✅ |
+| Parámetros 482/178/434/154 | `test_parameter_counts_match_adr_025` | ✅ |
+| I1 (varianza 1/16 ± 2 % con 10⁶ pesos) | `test_i1_lecun_variance_with_fan_in_16` | ✅ |
+| I2 (S1–S3 en 100 genomas por arquitectura) | `results/pilots/f5_i2/` (`neuroeco pilot i2`, commit de código `ee2204c`, árbol limpio): S1 y S2 = 0 en todas las capas; S3 entre 0.104 y 0.121 (umbral 0.1); `test_the_published_i2_result_meets_s1_s3` | ✅ |
+| Ablación de pesos | `test_weight_ablation_equals_input_ablation_and_changes_the_decision`, `test_all_weights_ablated_gives_inert_outputs` | ✅ |
+| DET-4 | `test_det4_save_and_load_preserve_the_outputs` | ✅ |
+| Rechazo de esquema distinto | `test_a_model_with_another_input_schema_is_rejected` y siguientes de `test_model_store.py` | ✅ |
+| La salida decodificada coincide con la acción aplicada (ADR-025) | `test_decoded_output_is_the_applied_action`; inspector con tolerancia 1e-12 | ✅ |
+
+- **Añadido además:** `--prey/--predator model:<archivo>` en `run` y `view`, y las activaciones de
+  las capas ocultas en el inspector (previstas para F5 en ADR-031).
+- **Observación:** S3 pasa con poco margen (mediana 0.104–0.121 frente a 0.1), como anticipaba
+  ADR-018 (entradas con E[x²] < 1). La ganancia g = 1 se mantiene; solo cambiaría con un ADR si
+  S3 fallara.
+- **Decisión técnica:** el inspector compara la salida recalculada de una fila con la acción
+  registrada del lote con tolerancia 1e-12, porque el producto matricial de una fila y el del
+  lote pueden diferir en el último bit.
+- **Siguiente fase:** F6 (neuroevolución, P0b, P2 y P3).
+
+| Incremento | Commit | CI |
+|---|---|---|
+| F5 código y pruebas | `ee2204c` | Publicado con el cierre |
+| F5 resultado de I2 y cierre | commit que añade esta fila | CI de su publicación |
 
