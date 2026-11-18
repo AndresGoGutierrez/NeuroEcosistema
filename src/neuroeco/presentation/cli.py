@@ -38,7 +38,11 @@ from neuroeco.infrastructure.storage import (
     write_csv,
     write_json,
 )
-from neuroeco.presentation.experiment import experiment_evaluate, experiment_train
+from neuroeco.presentation.experiment import (
+    experiment_analyze,
+    experiment_evaluate,
+    experiment_train,
+)
 from neuroeco.presentation.inspector import SessionInfo
 from neuroeco.presentation.pilot_i2 import pilot_i2
 from neuroeco.presentation.pilot_p0b import pilot_p0b
@@ -65,6 +69,7 @@ experiment_app = typer.Typer(help="Formal experiments (F8).", no_args_is_help=Tr
 app.add_typer(experiment_app, name="experiment")
 experiment_app.command("train")(experiment_train)
 experiment_app.command("evaluate")(experiment_evaluate)
+experiment_app.command("analyze")(experiment_analyze)
 
 USER_ERRORS = (ConfigError, ConfigurationError, InitializationError, ValueError)
 

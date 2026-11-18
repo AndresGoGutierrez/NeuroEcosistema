@@ -281,3 +281,29 @@ def experiment_evaluate(
         writer.writeheader()
         writer.writerows(rows)
     typer.echo(f"written {target}")
+
+
+def experiment_analyze(
+    protocol_path: Annotated[Path, typer.Option("--protocol")] = PROTOCOL,
+    root: Annotated[Path, typer.Option(help="Campaign directory.")] = ROOT,
+    decision: Annotated[Path, typer.Option(help="P2 decision (Delta, theta).")] = Path(
+        "results/pilots/p2/p2_decision.json"
+    ),
+) -> None:
+    """C1, C2, C3 and generalization tables and figures from test_episodes.csv (ADR-017)."""
+    import matplotlib.pyplot as plt
+
+    from neuroeco.analysis.experiments import analyze
+    from neuroeco.analysis.report import report_documents
+
+    protocol = load_protocol(protocol_path)
+    report = analyze(root, decision, protocol.runs)
+    output = root / "analysis"
+    output.mkdir(parents=True, exist_ok=True)
+    texts, figures = report_documents(report, root / "runs")
+    for name, text in texts.items():
+        (output / name).write_text(text, encoding="utf-8")
+    for name, figure in figures.items():
+        figure.savefig(output / name, dpi=150)
+        plt.close(figure)
+    typer.echo(f"written {root / 'analysis'}")

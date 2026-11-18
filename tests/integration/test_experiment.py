@@ -1,6 +1,7 @@
 """F8: formal campaign (resumable training with a stop time) and test evaluation, reduced."""
 
 import csv
+import json
 import shutil
 from pathlib import Path
 
@@ -98,3 +99,27 @@ def test_campaign_stops_before_the_deadline_and_resumes(campaign) -> None:
     assert {r["model"] for r in rows} == {"before", "after", "reference"}
     repeated = runner.invoke(app, ["experiment", "evaluate", *options])
     assert repeated.exit_code == 1 and "never overwritten" in repeated.output
+
+    decision = tmp_path / "p2_decision.json"
+    target = {"delta": 0.01, "theta": 0.2}
+    decision.write_text(json.dumps({"targets": {"prey": target, "predator": target}}), "utf-8")
+    analyze_options = [o for o in options if o not in ("--workers", "0")]
+    analyze_options = [
+        o
+        for i, o in enumerate(analyze_options)
+        if analyze_options[i - 1] != "--config-dir" and o != "--config-dir"
+    ]
+    analyzed = runner.invoke(
+        app, ["experiment", "analyze", *analyze_options, "--decision", str(decision)]
+    )
+    assert analyzed.exit_code == 0, analyzed.output
+    out = tmp_path / "f8" / "analysis"
+    report = json.loads((out / "analysis.json").read_text("utf-8"))
+    assert {(r["species"], r["scenario"]) for r in report["C1"]} == {
+        (s, c) for s in ("prey", "predator") for c in "ABC"
+    }
+    assert all(r["n"] == 2 and r["confirmatory"] is False for r in report["C1"] + report["C3"])
+    assert len(report["C2"]) == 2
+    assert {r["opponent"] for r in report["generalization"]} == {"M0", "M1", "M2", "M3", "M4"}
+    for name in ("tables.md", "c1_differences.png", "c3_differences.png", "validation_curves.png"):
+        assert (out / name).stat().st_size > 0
