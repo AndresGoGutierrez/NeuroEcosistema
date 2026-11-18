@@ -21,6 +21,7 @@ import yaml
 
 from neuroeco.application.calibration import IterationSpec, P1Spec, RoundSpec
 from neuroeco.application.configs import P0Spec, ReferenceSpec, ResolvedConfig, RuleParams
+from neuroeco.application.training import TrainingSpec
 from neuroeco.domain.params import WorldParams
 
 BASE_FILE = "base.yaml"
@@ -153,6 +154,11 @@ def load_config(config_dir: Path, scenario: str, overrides: Sequence[str] = ()) 
 
 def load_p0_spec(path: Path) -> P0Spec:
     return build_dataclass(P0Spec, read_yaml(path), path.stem)
+
+
+def load_training_spec(path: Path) -> TrainingSpec:
+    """One training run (F6, ADR-027)."""
+    return _build_spec(TrainingSpec, path)
 
 
 def load_reference_spec(path: Path) -> ReferenceSpec:

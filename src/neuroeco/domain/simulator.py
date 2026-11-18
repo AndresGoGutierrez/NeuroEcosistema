@@ -208,8 +208,13 @@ def simulate_episode(
     streams: EpisodeStreams,
     on_step: Callable[[StepTrace], None] | None = None,
     timer: PhaseTimer | None = None,
+    stop_without_predators: bool = False,
 ) -> EpisodeRecord:
-    """Run one episode from deterministic initial conditions until termination (phase 9)."""
+    """Run one episode from deterministic initial conditions until termination (phase 9).
+
+    ``stop_without_predators`` (ADR-015) also ends the episode when every predator is dead; it is
+    only for training and validation of predators, whose fitness can no longer change then.
+    """
     world = initialize_world(params, streams)
     recorder = _Recorder(world)
     while True:
@@ -218,5 +223,7 @@ def simulate_episode(
         if on_step is not None:
             on_step(trace)
         if is_terminal(world.step, params.t_max, int(world.prey.alive.sum())):
+            break
+        if stop_without_predators and not world.predators.alive.any():
             break
     return recorder.build(world, params.t_max)

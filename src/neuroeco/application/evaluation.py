@@ -39,11 +39,14 @@ def run_episode(
     identity: EpisodeIdentity,
     on_step: Callable[[StepTrace], None] | None = None,
     timer: PhaseTimer | None = None,
+    stop_without_predators: bool = False,
 ) -> EpisodeResult:
     streams = registry.episode_streams(
         identity.purpose, identity.seed_group, identity.run, identity.generation, identity.item
     )
-    record = simulate_episode(params, prey_policy, predator_policy, streams, on_step, timer)
+    record = simulate_episode(
+        params, prey_policy, predator_policy, streams, on_step, timer, stop_without_predators
+    )
     return EpisodeResult(identity=identity, record=record, metrics=episode_metrics(record))
 
 
