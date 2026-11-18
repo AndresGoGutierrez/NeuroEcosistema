@@ -122,7 +122,7 @@ def validation_figure(runs_root: Path):
             generations = [g for g, _ in runs[0]]
             median = [statistics.median(run[i][1] for run in runs) for i in range(len(generations))]
             ax.plot(generations, median, marker=".", label=config)
-        ax.set_title(f"F_val (mediana entre ejecuciones): {LABEL[species]}")
+        ax.set_title(f"F_val mediano: {LABEL[species]}", fontsize=10)
         ax.set_xlabel("generación")
         ax.legend(fontsize=7)
     fig.tight_layout()

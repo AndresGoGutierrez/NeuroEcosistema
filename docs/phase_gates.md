@@ -723,3 +723,66 @@ Los resultados se usan solo si pertenecen a su especificación registrada (SHA-2
 | F5 código y pruebas | `ee2204c` | Publicado con el cierre |
 | F5 resultado de I2 y cierre | commit que añade esta fila | CI de su publicación |
 
+
+## F6: Neuroevolución, P0b, P2 y P3
+
+- **Estado:** ✅ Cerrada el 2026-11-17.
+- **Documentación:** [pilot_report.md](pilot_report.md) (P0b, P2, P3), ADR-035.
+
+| Criterio | Evidencia | Estado |
+|---|---|---|
+| O1 sin cambio de resultados | `tests/regression/test_o1_equivalence.py` (huellas registradas antes de O1) | ✅ |
+| Algoritmo genético (ADR-027) | `test_evolution.py` (problemas de juguete, élite con reevaluación, torneo) | ✅ |
+| DET-3: resultados idénticos con 0, 1 y 4 workers | `test_training.py` | ✅ |
+| BLAS a un hilo en los workers (ADR-016) | `thread_pools` registrado en cada `manifest.json` | ✅ |
+| P0b: costo del forward y aceleración | `results/pilots/p0b/`: 9.6 µs/paso (25/3); 6.4× con 16 workers | ✅ |
+| P2: σ, G, currículo, Δ y θ por las reglas de ADR-035 | `results/pilots/p2/p2_decision.json`: σ = 0.10, G = 70, κ = 2, G_c = 35 | ✅ |
+| P3: t_run y R (ADR-004) | `results/pilots/p3/durations.csv`: Σ t_run = 0.736 h, R = 10 | ✅ |
+
+| Incremento | Commit | CI |
+|---|---|---|
+| Entrenamiento, ejecutores y almacén de ejecuciones | — | 44215315251 ✅ |
+| P0b | `ce30d1e` | 44216490544 ✅ |
+| P2 (herramienta) | `264ef17` | 44217564282 ✅ |
+| P2 (resultados) | `188d18c` | `[skip ci]` |
+| P3 | `e42fba8` | 44237079286 ✅ (junto con el protocolo) |
+
+## F7: Protocolo prerregistrado
+
+- **Estado:** ✅ Cerrada el 2026-11-18 con el tag `protocol-v1` (autorizado por el autor).
+- **Documentación:** [experimental_protocol.md](experimental_protocol.md); `configs/protocol.yaml`.
+
+| Criterio | Evidencia | Estado |
+|---|---|---|
+| Protocolo fijado antes de cualquier ejecución formal | `58917d3` (tag `protocol-v1`), anterior a `96117d7` (datos de F8) | ✅ |
+| Ensayo en miniatura de toda la cadena (entrenar, parar, reanudar, evaluar, analizar) | `tests/integration/test_experiment.py` | ✅ |
+| Semillas formales disjuntas de los pilotos (grupos 100–107) | `test_formal_seed_groups_start_at_100`, `test_p3_protocol_uses_its_own_seed_groups` | ✅ |
+| Suite completa | 1063 pruebas; CI 44237079286 ✅ | ✅ |
+
+## F8: Experimentos formales
+
+- **Estado:** ✅ Cerrada el 2026-11-18.
+- **Ejecución:** entrenamiento lanzado por el autor (`neuroeco experiment train --workers 16`),
+  80 ejecuciones completas en 7.3 h, ninguna incompleta; evaluación TEST (55 400 episodios) y
+  análisis con `neuroeco experiment evaluate` y `analyze`. Sin desviaciones del protocolo.
+- **Resultados:** `results/experiments/f8/` (`runs/`, `test_episodes.csv`,
+  `analysis/tables.md`, `analysis/analysis.json`, figuras).
+
+| Criterio | Evidencia | Estado |
+|---|---|---|
+| R = 10 ejecuciones por configuración, todas completas | `results/experiments/f8/runs/` (80), `durations.csv` | ✅ |
+| Evaluación en semillas TEST frente a M0–M4 | `test_episodes.csv` | ✅ |
+| C1, C2, C3 y generalización según ADR-013, ADR-017 y ADR-019 | `analysis/tables.md` | ✅ |
+
+**Resultados principales** (detalles en el informe, F9):
+
+- **C1:** el entrenamiento mejora a ambas especies en los tres escenarios (10/10 ejecuciones
+  positivas, p Holm = 0.0117 en las seis pruebas).
+- **C3:** el depredador entrenado iguala a las reglas en A y C y las supera en B (9/10, IC
+  [0.017, 0.056], p Holm = 0.086, no significativo tras Holm); la presa entrenada queda por
+  debajo de las reglas en A y C (10/10 negativas, p Holm = 0.0117) e igual en B.
+- **C2:** la red compacta es no inferior para el depredador (IC [−0.020, 0.016] dentro de
+  ±Δ = 0.084); para la presa el resultado es inconcluso (IC [−0.042, 0.016] frente a
+  Δ = 0.0104). Sin diferencia de eficiencia (p Holm 0.31 y 0.32).
+- **Generalización:** la presa entrenada supera a las reglas solo frente al oponente aleatorio
+  M3; el depredador mantiene su ventaja en B frente a M2 y M4.
