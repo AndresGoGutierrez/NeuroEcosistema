@@ -786,3 +786,15 @@ Los resultados se usan solo si pertenecen a su especificación registrada (SHA-2
   Δ = 0.0104). Sin diferencia de eficiencia (p Holm 0.31 y 0.32).
 - **Generalización:** la presa entrenada supera a las reglas solo frente al oponente aleatorio
   M3; el depredador mantiene su ventaja en B frente a M2 y M4.
+
+## F9: Entregables
+
+- **Estado:** ✅ Completada el 2026-11-18, salvo el ensayo del visor por el autor (ver abajo).
+
+| Criterio (ADR-024) | Evidencia | Estado |
+|---|---|---|
+| Informe ≤ 10 páginas (§7.3) | [report.md](report.md) | ✅ |
+| Bitácora ≥ 6 decisiones (§7.4) | `docs/decisions/` ADR-001 a ADR-037, los 7 ejes de §5 cubiertos (ADR-036 interpretación, ADR-037 mejora) | ✅ |
+| Declaración de IA (§8) | [ai_usage_statement.md](ai_usage_statement.md) | ✅ |
+| Reproducción en clon limpio | Clon de `c8af546`, `uv sync --frozen`: `experiment analyze` regenera `analysis/` idéntico byte a byte; reentrenar `f8_predator_base_B_r0` reproduce `generations.csv`, `summary.json` y los modelos bit a bit (solo cambian el manifiesto y la duración); `lint-imports` 4 contratos | ✅ |
+| Ensayo de la demo | [demo.md](demo.md): comandos `run` ensayados; el visor requiere ventana gráfica y lo ensaya el autor | ⏳ autor |
