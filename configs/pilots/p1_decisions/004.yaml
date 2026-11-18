@@ -1,0 +1,28 @@
+# P1 author decision 004 (D-T4d-3, P1-18): stage C met S_C with B3 missed narrowly in C.
+schema: neuroeco.p1-decision/1
+decision: 4
+kind: b_criteria
+step:
+  kind: entry
+  number: 0
+judges:
+  directory: calibration/iteration_007
+  provenance_sha256: f00194d75e541b3ffeec4b2729348f880a1d87dfb5f28212ad9ea00a92da0013
+  criteria_sha256: 2d8ee48d402ac34aabf5f9df218d75d2b2e616eff7cea2367f872b3f068cf065
+choice: next_stage
+items:
+  - criterion: B3
+    part: ''
+    scenario: C
+    status: fail
+    decision: accepted_pending_adr
+    justification: >-
+      37/75 = 0.493 frente al umbral de 1/2: falta un depredador. El único ajuste restante en la
+      etapa C (n_pred,C = 4, el mínimo mayor que n_pred,A = 3) pondría en riesgo A4 (d), que es
+      de clase A (702 frente a 654 capturas), para acercarse a un umbral que ya casi se alcanza;
+      P1-18 no permite iterar para alcanzar un tamaño del efecto. Se documenta y se decide por
+      ADR tras la confirmación.
+justification: >-
+  La iteración 7 cumple S_C con B1 (0.241) y A6 (C, A) holgados. B3 falla por un depredador; se
+  pasa a la evaluación de entrada con los valores de la iteración 7. Decisión tomada por Claude
+  por delegación expresa del autor (2026-11-17).
