@@ -1,0 +1,21 @@
+# Pre-registered protocol of the formal experiments (F7; docs/experimental_protocol.md).
+# GA values: ADR-035 fixed values and the P2 decision (results/pilots/p2/p2_decision.json).
+# R: ADR-004 with the P3 durations (results/pilots/p3/durations.csv): sum t_run = 2650 s,
+# H_req(10) = 10 * 0.736 h * 1.3 + H_eval ~ 10.6 h <= H = 45 h, so R = min(R_max, 10) = 10.
+stage: f8
+runs: 10
+test_episodes: 50
+first_seed_group: 100
+population: 40
+elite: 2
+tournament: 3
+episodes: 4
+validation_episodes: 16
+generations: 70
+validation_interval: 5
+sigma_prey_base: 0.1
+sigma_predator_base: 0.1
+sigma_prey_compact: 0.1
+sigma_predator_compact: 0.1
+curriculum_kappa: 2.0
+curriculum_generations: 35
