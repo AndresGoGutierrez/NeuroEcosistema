@@ -1,0 +1,14 @@
+# Pilot P0b (F6, decision A3): cost of the network forward pass per step and parallel speed-up.
+# Measured after O1 with the O4 methodology: randomized interleaved cell order, a warm-up per
+# cell, and the power state recorded. P0's verdict (A4) is not re-decided here.
+pilot: P0b
+seed_group: 3             # ADR-028; 0 exploratory, 1 P0, 2 F5-I2, 10-32 P1
+scenario: A
+n_prey: [25, 50]          # cells (25, 3): scenario A as frozen; (50, 8): the P0 stress reference
+n_predators: [3, 8]
+policies: [rules, neural]         # neural = random prey_base and predator_base networks
+repetitions: 5
+speedup_workers: [1, 2, 4, 8, 16, 24, 32]
+speedup_genomes: 32       # a generation-like batch of prey_base genomes against the rules
+speedup_episodes: 2
+speedup_repetitions: 3

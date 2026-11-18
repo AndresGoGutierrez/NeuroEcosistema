@@ -20,7 +20,13 @@ from typing import Any
 import yaml
 
 from neuroeco.application.calibration import IterationSpec, P1Spec, RoundSpec
-from neuroeco.application.configs import P0Spec, ReferenceSpec, ResolvedConfig, RuleParams
+from neuroeco.application.configs import (
+    P0bSpec,
+    P0Spec,
+    ReferenceSpec,
+    ResolvedConfig,
+    RuleParams,
+)
 from neuroeco.application.training import TrainingSpec
 from neuroeco.domain.params import WorldParams
 
@@ -154,6 +160,11 @@ def load_config(config_dir: Path, scenario: str, overrides: Sequence[str] = ()) 
 
 def load_p0_spec(path: Path) -> P0Spec:
     return build_dataclass(P0Spec, read_yaml(path), path.stem)
+
+
+def load_p0b_spec(path: Path) -> P0bSpec:
+    """P0b of F6 (decision A3)."""
+    return _build_spec(P0bSpec, path)
 
 
 def load_training_spec(path: Path) -> TrainingSpec:
