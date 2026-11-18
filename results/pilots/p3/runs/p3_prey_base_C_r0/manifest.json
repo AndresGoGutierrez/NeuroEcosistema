@@ -1,0 +1,66 @@
+{
+  "protocol": "configs\\pilots\\p3.yaml",
+  "provenance": {
+    "command": [
+      "C:\\Universidad Santoto\\Noveno Semestre\\ProyectosIA\\NEUROECOSISTEMA\\.venv\\Scripts\\neuroeco",
+      "experiment",
+      "train",
+      "--protocol",
+      "configs/pilots/p3.yaml",
+      "--root",
+      "results/pilots/p3",
+      "--workers",
+      "16",
+      "--stop-at",
+      "2026-11-18T14:45"
+    ],
+    "config_hash": "d1907c04d422201519cd11241c1717673aafd317690add143a5ddf461c9cb5b2",
+    "cpu_count": 32,
+    "git_commit": "188d18c4e46ecfa2811da17f28ebe902e25d18e2",
+    "git_dirty": true,
+    "machine": "AMD64",
+    "numpy": "2.5.4",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "processor": "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel",
+    "python": "3.12.14",
+    "thread_env": {
+      "MKL_NUM_THREADS": "1",
+      "OMP_NUM_THREADS": "1",
+      "OPENBLAS_NUM_THREADS": "1"
+    },
+    "timestamp_utc": "2026-11-18T03:43:41+00:00"
+  },
+  "spec": {
+    "architecture": "prey_base",
+    "curriculum_generations": 0,
+    "curriculum_kappa": 1.0,
+    "elite": 2,
+    "episodes": 4,
+    "generations": 70,
+    "name": "p3_prey_base_C_r0",
+    "population": 40,
+    "run": 0,
+    "scenario": "C",
+    "seed_group": 66,
+    "sigma": 0.1,
+    "species": "prey",
+    "tournament": 3,
+    "validation_episodes": 16,
+    "validation_interval": 5
+  },
+  "thread_pools": [
+    {
+      "internal_api": "openblas",
+      "num_threads": 1,
+      "user_api": "blas",
+      "version": "0.3.34.106.0"
+    },
+    {
+      "internal_api": "openblas",
+      "num_threads": 1,
+      "user_api": "blas",
+      "version": "0.3.31.dev"
+    }
+  ],
+  "workers": 16
+}
