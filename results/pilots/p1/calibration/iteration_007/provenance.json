@@ -1,0 +1,790 @@
+{
+  "a2_violation": false,
+  "author_authorized": false,
+  "block": "calibration",
+  "bootstrap_run": 7,
+  "command": [
+    "C:\\Universidad Santoto\\Noveno Semestre\\ProyectosIA\\NEUROECOSISTEMA\\.venv\\Scripts\\neuroeco",
+    "pilot",
+    "p1",
+    "--iteration",
+    "configs/pilots/p1/iterations/007.yaml"
+  ],
+  "config_files": {
+    "base": "ebed2b52917757f0fafc0bd8e3a3718abbe92c8cfdd2e027ba4dacdfc931fd81",
+    "baselines": "0f9ed5dd2d430f3c648e84c78560ad07c9ca2002ac2a35cf356c729bd4ecc8b8",
+    "p0_spec": "1b571bbe22926d1bef9cf42d3647b0255b3e682aff90bda945c8c8152f4453cc",
+    "p1_spec": "ae61c010af8252659b7c117151f9ceaf6d98af9cfd4c77ce1d90430c90565c3e",
+    "scenarios": "ded87046bbc3ce958d70c4cb9787b7096db4b39f21861cd7797daa3435313367"
+  },
+  "config_hash": "7fc1b87c48522845ec3660256443af07d6084c0afd40f20361adc8fe7d15887a",
+  "configurations": [
+    {
+      "config_hash": "7fc1b87c48522845ec3660256443af07d6084c0afd40f20361adc8fe7d15887a",
+      "overrides": [
+        "world.plant_energy=30.0",
+        "world.regrow_delay=50",
+        "world.n_plants=40",
+        "rules.prey.flee_threshold=0.2",
+        "rules.prey.cruise_fraction=0.3",
+        "rules.predator.cruise_fraction=0.7"
+      ],
+      "rules": {
+        "predator": {
+          "cruise_fraction": 0.7
+        },
+        "prey": {
+          "cruise_fraction": 0.3,
+          "flee_threshold": 0.2
+        }
+      },
+      "scenario": "A",
+      "world": {
+        "capture_radius": 2.5,
+        "eat_radius": 1.5,
+        "n_plants": 40,
+        "n_predators": 3,
+        "n_prey": 25,
+        "plant_energy": 30.0,
+        "predator": {
+          "c_basal": 0.16,
+          "c_move": 0.32,
+          "e_max": 100.0,
+          "initial_energy_fraction": 0.8,
+          "omega_max": 0.3,
+          "v_max": 1.3,
+          "vision_radius": 20.0
+        },
+        "prey": {
+          "c_basal": 0.16,
+          "c_move": 0.32,
+          "e_max": 100.0,
+          "initial_energy_fraction": 0.8,
+          "omega_max": 0.5,
+          "v_max": 1.0,
+          "vision_radius": 20.0
+        },
+        "prey_energy": 40.0,
+        "regrow_delay": 50,
+        "size": 150.0,
+        "t_max": 1000
+      }
+    },
+    {
+      "config_hash": "40556e8e95cf9c4b03926c1a4bf78f5c81eb459cd32fafe7d897148ca584d20e",
+      "overrides": [
+        "world.plant_energy=30.0",
+        "world.regrow_delay=50",
+        "world.n_plants=40",
+        "rules.prey.flee_threshold=0.2",
+        "rules.prey.cruise_fraction=0.3",
+        "rules.predator.cruise_fraction=0.7",
+        "world.n_predators=0"
+      ],
+      "rules": {
+        "predator": {
+          "cruise_fraction": 0.7
+        },
+        "prey": {
+          "cruise_fraction": 0.3,
+          "flee_threshold": 0.2
+        }
+      },
+      "scenario": "A",
+      "world": {
+        "capture_radius": 2.5,
+        "eat_radius": 1.5,
+        "n_plants": 40,
+        "n_predators": 0,
+        "n_prey": 25,
+        "plant_energy": 30.0,
+        "predator": {
+          "c_basal": 0.16,
+          "c_move": 0.32,
+          "e_max": 100.0,
+          "initial_energy_fraction": 0.8,
+          "omega_max": 0.3,
+          "v_max": 1.3,
+          "vision_radius": 20.0
+        },
+        "prey": {
+          "c_basal": 0.16,
+          "c_move": 0.32,
+          "e_max": 100.0,
+          "initial_energy_fraction": 0.8,
+          "omega_max": 0.5,
+          "v_max": 1.0,
+          "vision_radius": 20.0
+        },
+        "prey_energy": 40.0,
+        "regrow_delay": 50,
+        "size": 150.0,
+        "t_max": 1000
+      }
+    },
+    {
+      "config_hash": "d1907c04d422201519cd11241c1717673aafd317690add143a5ddf461c9cb5b2",
+      "overrides": [
+        "world.plant_energy=30.0",
+        "world.regrow_delay=50",
+        "world.n_plants=40",
+        "rules.prey.flee_threshold=0.2",
+        "rules.prey.cruise_fraction=0.3",
+        "rules.predator.cruise_fraction=0.7",
+        "world.n_predators=5"
+      ],
+      "rules": {
+        "predator": {
+          "cruise_fraction": 0.7
+        },
+        "prey": {
+          "cruise_fraction": 0.3,
+          "flee_threshold": 0.2
+        }
+      },
+      "scenario": "C",
+      "world": {
+        "capture_radius": 2.5,
+        "eat_radius": 1.5,
+        "n_plants": 40,
+        "n_predators": 5,
+        "n_prey": 25,
+        "plant_energy": 30.0,
+        "predator": {
+          "c_basal": 0.16,
+          "c_move": 0.32,
+          "e_max": 100.0,
+          "initial_energy_fraction": 0.8,
+          "omega_max": 0.3,
+          "v_max": 1.3,
+          "vision_radius": 20.0
+        },
+        "prey": {
+          "c_basal": 0.16,
+          "c_move": 0.32,
+          "e_max": 100.0,
+          "initial_energy_fraction": 0.8,
+          "omega_max": 0.5,
+          "v_max": 1.0,
+          "vision_radius": 20.0
+        },
+        "prey_energy": 40.0,
+        "regrow_delay": 50,
+        "size": 150.0,
+        "t_max": 1000
+      }
+    }
+  ],
+  "cpu_count": 32,
+  "dependencies": {
+    "numpy": "2.5.4",
+    "pandas": "3.1.1",
+    "pygame-ce": "2.5.8",
+    "pyyaml": "6.0.3",
+    "scipy": "1.18.1",
+    "threadpoolctl": "3.8.0",
+    "typer": "0.29.1"
+  },
+  "duration_seconds": 233.342,
+  "episodes_discarded": 0,
+  "episodes_per_condition": 30,
+  "episodes_planned": 690,
+  "episodes_written": 690,
+  "fingerprint": {
+    "code": {
+      "analysis": "4f4803bc0058ca6609489f37fe0e292abaab364f5ebc3358d97d34d9c81d4419",
+      "simulation": "740004ac7be88fbde2b0a42ab0a770edf89d26d0d6a3e0213ed7cc8476b3c88b"
+    },
+    "environment": {
+      "byteorder": "little",
+      "dependencies": {
+        "numpy": "2.5.4",
+        "pandas": "3.1.1",
+        "pygame-ce": "2.5.8",
+        "pyyaml": "6.0.3",
+        "scipy": "1.18.1",
+        "threadpoolctl": "3.8.0",
+        "typer": "0.29.1"
+      },
+      "implementation": "cpython",
+      "machine": "AMD64",
+      "numpy_cpu_features": [
+        "AVX",
+        "AVX2",
+        "BMI",
+        "BMI2",
+        "CX16",
+        "F16C",
+        "FMA3",
+        "GFNI",
+        "LAHF",
+        "LZCNT",
+        "MMX",
+        "MOVBE",
+        "POPCNT",
+        "SSE",
+        "SSE2",
+        "SSE3",
+        "SSE41",
+        "SSE42",
+        "SSSE3",
+        "VAES",
+        "VPCLMULQDQ",
+        "X86_V2",
+        "X86_V3"
+      ],
+      "os": [
+        "Windows",
+        "11",
+        "10.0.26200"
+      ],
+      "platform": "win32",
+      "python": "3.12.14",
+      "thread_env": {
+        "MKL_NUM_THREADS": "1",
+        "OMP_NUM_THREADS": "1",
+        "OPENBLAS_NUM_THREADS": "1"
+      },
+      "uv_lock_sha256": "a1696c0b67e691962127862195bcae1ce0f93a8db41e69a6814b88cc52717a14"
+    }
+  },
+  "finished_utc": "2026-11-18T00:05:32+00:00",
+  "git_checks": {
+    "canonical_paths": true,
+    "content_overrides": [],
+    "head": "a1d3078915bc120eefef382a5191ceeef5def30d",
+    "head_mismatches": [],
+    "hidden_changes": [],
+    "ignored_outputs": [],
+    "output_root_inside": true,
+    "outside_repository": [],
+    "package_inside": true,
+    "remote": "origin",
+    "remote_url": "https://github.com/AndresGoGutierrez/NeuroEcosistema.git",
+    "root": "C:/Universidad Santoto/Noveno Semestre/ProyectosIA/NEUROECOSISTEMA",
+    "synchronized": true,
+    "untracked": [],
+    "upstream": "origin/main",
+    "upstream_commit": "a1d3078915bc120eefef382a5191ceeef5def30d",
+    "upstream_full_ref": "refs/remotes/origin/main"
+  },
+  "git_commit": "a1d3078915bc120eefef382a5191ceeef5def30d",
+  "git_dirty": false,
+  "input_files": [
+    {
+      "path": "configs/pilots/p1.yaml",
+      "sha256": "ae61c010af8252659b7c117151f9ceaf6d98af9cfd4c77ce1d90430c90565c3e"
+    },
+    {
+      "path": "configs/pilots/p0.yaml",
+      "sha256": "1b571bbe22926d1bef9cf42d3647b0255b3e682aff90bda945c8c8152f4453cc"
+    },
+    {
+      "path": "configs/base.yaml",
+      "sha256": "ebed2b52917757f0fafc0bd8e3a3718abbe92c8cfdd2e027ba4dacdfc931fd81"
+    },
+    {
+      "path": "configs/scenarios.yaml",
+      "sha256": "ded87046bbc3ce958d70c4cb9787b7096db4b39f21861cd7797daa3435313367"
+    },
+    {
+      "path": "configs/baselines.yaml",
+      "sha256": "0f9ed5dd2d430f3c648e84c78560ad07c9ca2002ac2a35cf356c729bd4ecc8b8"
+    },
+    {
+      "path": "configs/pilots/p1/iterations/001.yaml",
+      "sha256": "39b160fe0b8224a797680bcf9b6bee099abd7d0563484d38817aca67e77930e4"
+    },
+    {
+      "path": "configs/pilots/p1/iterations/002.yaml",
+      "sha256": "1c60373082f27b0d6f83e35398653d98659497fe9a4fe97ffa2ef3f714e26198"
+    },
+    {
+      "path": "configs/pilots/p1/iterations/003.yaml",
+      "sha256": "de8725aa3af971e6c528ffce645bd97641369a167431d36a79b0fed80596794e"
+    },
+    {
+      "path": "configs/pilots/p1/iterations/004.yaml",
+      "sha256": "9113772f01d27c9c5f2e4e0e18a0a7886c8380d96425cacd8156c3aef3a36650"
+    },
+    {
+      "path": "configs/pilots/p1/iterations/005.yaml",
+      "sha256": "1d6999cf2b68e341838cdbcfd3ebb41d12d19b2d7da10009eb4e04562b1600de"
+    },
+    {
+      "path": "configs/pilots/p1/iterations/006.yaml",
+      "sha256": "36f1b7eea34ae70f9e8efd6125371ee25bc39397c894f9b8c4588f19f22d714a"
+    },
+    {
+      "path": "configs/pilots/p1/iterations/007.yaml",
+      "sha256": "1f8bcf371f3ddcb6832bf63031a282d5cff21d9d829b2de7be1ee1266228a7c6"
+    },
+    {
+      "path": "configs/pilots/p1/rounds/01.yaml",
+      "sha256": "a34fd3376f7dd4dd263fd1da08bf1cc50d6db460541810754b4a719c899f8696"
+    },
+    {
+      "path": "configs/pilots/p1/rounds/02.yaml",
+      "sha256": "2b3f14d1ea213b7ffebe8014d5b60b70a0334487f5d228dfde3990a0351432cd"
+    },
+    {
+      "path": "results/pilots/p1/calibration/iteration_001/provenance.json",
+      "sha256": "cb8677fb563e57318fae8297a9243533e5e4c87014f65bbb2d46189ea782dad2"
+    },
+    {
+      "path": "results/pilots/p1/calibration/iteration_001/episodes.csv",
+      "sha256": "93a97a438bde4f3935e83a1e6e6b907ab132284612f8540be58d5e65b0fc92ab"
+    },
+    {
+      "path": "results/pilots/p1/calibration/iteration_001/bootstrap_keys.csv",
+      "sha256": "dd59bf36bcd5251f0cdefa2bff6099cf756e63403ed291b6c15bf0b09f113dae"
+    },
+    {
+      "path": "results/pilots/p1/calibration/iteration_002/provenance.json",
+      "sha256": "8473313fd2fd1bcb9c775e87a66c0c0f7cd2e92d49fba780c97170e8ca5d75c2"
+    },
+    {
+      "path": "results/pilots/p1/calibration/iteration_002/episodes.csv",
+      "sha256": "ac0c75415facf9eb2b7c8402d2f1a702d42586951bbd90b477794a7346301196"
+    },
+    {
+      "path": "results/pilots/p1/calibration/iteration_002/bootstrap_keys.csv",
+      "sha256": "68d7791ded74f7f8116b5d9af917830b47cee287453401c1185ae156617e3233"
+    },
+    {
+      "path": "results/pilots/p1/calibration/iteration_003/provenance.json",
+      "sha256": "5fbdce9fa6836216d60ba8fa21046e80831344d465cbdb80bd6937b9848dfc89"
+    },
+    {
+      "path": "results/pilots/p1/calibration/iteration_003/episodes.csv",
+      "sha256": "f457f6277e83f38b31ff85358607781b4e980af424ea0728549585ae8249efe8"
+    },
+    {
+      "path": "results/pilots/p1/calibration/iteration_003/bootstrap_keys.csv",
+      "sha256": "c483b15fe0ca410a0de9b8661a3587eeb8ae9a633a9a57a58e4566fba4ae99f4"
+    },
+    {
+      "path": "results/pilots/p1/calibration/iteration_004/provenance.json",
+      "sha256": "fa347e48b8759b2a8e7b54c638679abf1e5ee0fc342dd57c86133258ad8730c7"
+    },
+    {
+      "path": "results/pilots/p1/calibration/iteration_004/episodes.csv",
+      "sha256": "495d7930da21c5ea7632bdc899f1d9399f84b66a4e4967684ffbbf57977522b1"
+    },
+    {
+      "path": "results/pilots/p1/calibration/iteration_004/bootstrap_keys.csv",
+      "sha256": "6d314d18e5656f9914c970266dc246de096814183787a140c4382bf5ba04843b"
+    },
+    {
+      "path": "results/pilots/p1/calibration/iteration_005/provenance.json",
+      "sha256": "568cc3d94968c758ef0be1102d53eceb83d4ad1dc255ad35648c4d2e4d01e358"
+    },
+    {
+      "path": "results/pilots/p1/calibration/iteration_005/episodes.csv",
+      "sha256": "db355d4c319306e41fc0a448ea9122579d822e688af267208d4aaa132aa21144"
+    },
+    {
+      "path": "results/pilots/p1/calibration/iteration_005/bootstrap_keys.csv",
+      "sha256": "990309c77849cb6b40c1fa15d50ff12dffb01e7b68567e9c4d868491484df074"
+    },
+    {
+      "path": "results/pilots/p1/calibration/iteration_006/provenance.json",
+      "sha256": "82b597896a71d5d57de73469ace2d46af7c6016f661238dadffd799b755f5095"
+    },
+    {
+      "path": "results/pilots/p1/calibration/iteration_006/episodes.csv",
+      "sha256": "d63272786cf732cdc168d4acc1b86f178f6a4b68278acdc63524f67f80215602"
+    },
+    {
+      "path": "results/pilots/p1/calibration/iteration_006/bootstrap_keys.csv",
+      "sha256": "b430eff9dd2509a7fc4a21b0abf8bcdab7d6f55c0419cc13281a434b0118f3cf"
+    },
+    {
+      "path": "configs/pilots/p1_decisions/001.yaml",
+      "sha256": "d63ac34d1ab8221525e1ac8db47d2b37e528f7afeb947a17350d004620a28bdb"
+    },
+    {
+      "path": "configs/pilots/p1_decisions/002.yaml",
+      "sha256": "0f5a00651cbceeaa71df7ab67272134dbd0e1a228d09c8364b2eac1b62572d5f"
+    },
+    {
+      "path": "configs/pilots/p1_decisions/003.yaml",
+      "sha256": "c9add577e4f1961fdd233633c2bdeb51be6e9f53cefa6adf6717779699abedce"
+    },
+    {
+      "path": "results/pilots/p1/calibration/iteration_001/criteria.csv",
+      "sha256": "ad226ba6c8731267001b8d0ee95e0787b3f23635adbe8d18cc6f3b7537360dd9"
+    },
+    {
+      "path": "results/pilots/p1/calibration/iteration_001/criteria_provenance.json",
+      "sha256": "1dd3e0b33fc36496eb75a019b49278d6fdfba50f2ceb5bade4e5f35547e1c644"
+    },
+    {
+      "path": "results/pilots/p1/calibration/round_01/prey_grid/provenance.json",
+      "sha256": "7e5370045498a6e8302315e73db9148589fd650da396721afdd4d39016d01fef"
+    },
+    {
+      "path": "results/pilots/p1/calibration/round_01/prey_grid/episodes.csv",
+      "sha256": "81ead8ca88c0e76eb716d58f70eb63585dbfe7030bee241660dd5853918e7f5b"
+    },
+    {
+      "path": "results/pilots/p1/calibration/round_01/prey_grid/selection.json",
+      "sha256": "b7ec6fb63334a5dc0fe02b278383d637d186d65c19c66ce06125d8c1d83f78ec"
+    },
+    {
+      "path": "results/pilots/p1/calibration/round_01/predator_grid/provenance.json",
+      "sha256": "dcc593a453359616e6b85b12a701e07e0c0910b2fddd0c90f59b292ecbc6b24b"
+    },
+    {
+      "path": "results/pilots/p1/calibration/round_01/predator_grid/episodes.csv",
+      "sha256": "f7b247c8a3f5752b2acd8fb9301576099606e696654b8d4084396107d118ea50"
+    },
+    {
+      "path": "results/pilots/p1/calibration/round_01/predator_grid/selection.json",
+      "sha256": "8a51449baea5bcb7f6157d0b6cbea9d129ee4cd75836e47bd574b01e10af6741"
+    },
+    {
+      "path": "results/pilots/p1/calibration/round_01/reevaluation/provenance.json",
+      "sha256": "028a0628c8f9963d574350cde5f32d201333f11d7962c102928e936f1c096ca6"
+    },
+    {
+      "path": "results/pilots/p1/calibration/round_01/reevaluation/episodes.csv",
+      "sha256": "aa7c50a0b0335e691ac0bc2dc1fc544531f8d6c67d942d2f6d7397649b0fa502"
+    },
+    {
+      "path": "results/pilots/p1/calibration/round_01/reevaluation/criteria.csv",
+      "sha256": "f9d950ee5c1ad4761c746fafabd6f8b485be13feaa809817ef8e6ed1e7e3347c"
+    },
+    {
+      "path": "results/pilots/p1/calibration/round_01/reevaluation/criteria_provenance.json",
+      "sha256": "3fc413123de6da1cd131aa8bd09d95442c9418da219271924c9c9702ca7bfb92"
+    },
+    {
+      "path": "results/pilots/p1/calibration/round_02/prey_grid/provenance.json",
+      "sha256": "b6fb50701fb8e8bdba3877ad6fa380e4739476822a8512eab4b8ebe5c44160a9"
+    },
+    {
+      "path": "results/pilots/p1/calibration/round_02/prey_grid/episodes.csv",
+      "sha256": "d2fa570ee0d66710a8cadb072b1e4a76b003fd0c0a7a71519c6dc35bd9e5cf63"
+    },
+    {
+      "path": "results/pilots/p1/calibration/round_02/prey_grid/selection.json",
+      "sha256": "8c81b5811448b530e9b05968615e8c2fbf6ab39581d92863649446ef5f2bdd13"
+    },
+    {
+      "path": "results/pilots/p1/calibration/round_02/predator_grid/provenance.json",
+      "sha256": "5112a9bd122ec87ceea581fe7c099b5b598c22ede125e09e026f26233a0c8e04"
+    },
+    {
+      "path": "results/pilots/p1/calibration/round_02/predator_grid/episodes.csv",
+      "sha256": "f7b247c8a3f5752b2acd8fb9301576099606e696654b8d4084396107d118ea50"
+    },
+    {
+      "path": "results/pilots/p1/calibration/round_02/predator_grid/selection.json",
+      "sha256": "8a51449baea5bcb7f6157d0b6cbea9d129ee4cd75836e47bd574b01e10af6741"
+    },
+    {
+      "path": "results/pilots/p1/calibration/iteration_002/criteria.csv",
+      "sha256": "23f5c81c25b3ef93aa5de13eafdb8cde7c16277dbcc353318ff2410b0e5e0ad3"
+    },
+    {
+      "path": "results/pilots/p1/calibration/iteration_002/criteria_provenance.json",
+      "sha256": "482a28d34751d58d74783f1e9b670c57d65618669abaa3ae2de4b54a313609da"
+    },
+    {
+      "path": "results/pilots/p1/calibration/iteration_003/criteria.csv",
+      "sha256": "4ab63f984c6bc368feef53d2de2c8079ec9dc1be329516f6678106a25c347616"
+    },
+    {
+      "path": "results/pilots/p1/calibration/iteration_003/criteria_provenance.json",
+      "sha256": "557b8790d0ff44672c436d2eb67ee3af90904fff0e8236a5453a3a0c59037dc3"
+    },
+    {
+      "path": "results/pilots/p1/calibration/iteration_004/criteria.csv",
+      "sha256": "db112290c0216b34f20c2edf04b393aab5d7589f79d1cd43efe6f34bd65c965d"
+    },
+    {
+      "path": "results/pilots/p1/calibration/iteration_004/criteria_provenance.json",
+      "sha256": "25580e2be70db221af4b030c47404db77be13f1e1721bdc02a63260eee024d90"
+    },
+    {
+      "path": "results/pilots/p1/calibration/iteration_005/criteria.csv",
+      "sha256": "3e1efd7c8ebf42a4f7a0e92972fdd7ac37ac11553e52e146af1dee7c7e8774a2"
+    },
+    {
+      "path": "results/pilots/p1/calibration/iteration_005/criteria_provenance.json",
+      "sha256": "fa5fc8a45713b70dbc6610c56d02edcffc27da40e5a0407e4c58efe92b02ea56"
+    },
+    {
+      "path": "results/pilots/p1/calibration/iteration_006/criteria.csv",
+      "sha256": "569ad5c350511b35359b3cbaa0ac17c1a22bf084b18527a4f6a181d73116a050"
+    },
+    {
+      "path": "results/pilots/p1/calibration/iteration_006/criteria_provenance.json",
+      "sha256": "6bcb95c7fefec676baf3dc5eec078dc057e3b73ba3caee7653e8bd26c835537e"
+    }
+  ],
+  "iteration": 7,
+  "machine": "AMD64",
+  "mode": "iteration",
+  "numpy": "2.5.4",
+  "p1_spec": {
+    "path": "configs/pilots/p1.yaml",
+    "sha256": "ae61c010af8252659b7c117151f9ceaf6d98af9cfd4c77ce1d90430c90565c3e"
+  },
+  "platform": "Windows-11-10.0.26200-SP0",
+  "prerequisites": [
+    {
+      "directory": "results/pilots/p1/calibration/iteration_001",
+      "mode": "iteration",
+      "provenance_sha256": "cb8677fb563e57318fae8297a9243533e5e4c87014f65bbb2d46189ea782dad2",
+      "values_iteration": 1
+    },
+    {
+      "directory": "results/pilots/p1/calibration/iteration_002",
+      "mode": "iteration",
+      "provenance_sha256": "8473313fd2fd1bcb9c775e87a66c0c0f7cd2e92d49fba780c97170e8ca5d75c2",
+      "values_iteration": 2
+    },
+    {
+      "directory": "results/pilots/p1/calibration/iteration_003",
+      "mode": "iteration",
+      "provenance_sha256": "5fbdce9fa6836216d60ba8fa21046e80831344d465cbdb80bd6937b9848dfc89",
+      "values_iteration": 3
+    },
+    {
+      "directory": "results/pilots/p1/calibration/iteration_004",
+      "mode": "iteration",
+      "provenance_sha256": "fa347e48b8759b2a8e7b54c638679abf1e5ee0fc342dd57c86133258ad8730c7",
+      "values_iteration": 4
+    },
+    {
+      "directory": "results/pilots/p1/calibration/iteration_005",
+      "mode": "iteration",
+      "provenance_sha256": "568cc3d94968c758ef0be1102d53eceb83d4ad1dc255ad35648c4d2e4d01e358",
+      "values_iteration": 5
+    },
+    {
+      "directory": "results/pilots/p1/calibration/iteration_006",
+      "mode": "iteration",
+      "provenance_sha256": "82b597896a71d5d57de73469ace2d46af7c6016f661238dadffd799b755f5095",
+      "values_iteration": 6
+    }
+  ],
+  "previous_attempts": [],
+  "processor": "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel",
+  "project_seed": "151810796106167051982782525292607188790",
+  "python": "3.12.14",
+  "registered_iterations": [
+    {
+      "path": "configs/pilots/p1/iterations/001.yaml",
+      "sha256": "39b160fe0b8224a797680bcf9b6bee099abd7d0563484d38817aca67e77930e4"
+    },
+    {
+      "path": "configs/pilots/p1/iterations/002.yaml",
+      "sha256": "1c60373082f27b0d6f83e35398653d98659497fe9a4fe97ffa2ef3f714e26198"
+    },
+    {
+      "path": "configs/pilots/p1/iterations/003.yaml",
+      "sha256": "de8725aa3af971e6c528ffce645bd97641369a167431d36a79b0fed80596794e"
+    },
+    {
+      "path": "configs/pilots/p1/iterations/004.yaml",
+      "sha256": "9113772f01d27c9c5f2e4e0e18a0a7886c8380d96425cacd8156c3aef3a36650"
+    },
+    {
+      "path": "configs/pilots/p1/iterations/005.yaml",
+      "sha256": "1d6999cf2b68e341838cdbcfd3ebb41d12d19b2d7da10009eb4e04562b1600de"
+    },
+    {
+      "path": "configs/pilots/p1/iterations/006.yaml",
+      "sha256": "36f1b7eea34ae70f9e8efd6125371ee25bc39397c894f9b8c4588f19f22d714a"
+    },
+    {
+      "path": "configs/pilots/p1/iterations/007.yaml",
+      "sha256": "1f8bcf371f3ddcb6832bf63031a282d5cff21d9d829b2de7be1ee1266228a7c6"
+    }
+  ],
+  "registered_rounds": [
+    {
+      "path": "configs/pilots/p1/rounds/01.yaml",
+      "sha256": "a34fd3376f7dd4dd263fd1da08bf1cc50d6db460541810754b4a719c899f8696"
+    },
+    {
+      "path": "configs/pilots/p1/rounds/02.yaml",
+      "sha256": "2b3f14d1ea213b7ffebe8014d5b60b70a0334487f5d228dfde3990a0351432cd"
+    }
+  ],
+  "reserved_sha256": "bb19d82dbfc10afcf9b94fd45437f4c5e1b744eb0e7b611cb30846a5a52f96d7",
+  "result_files": {
+    "bootstrap_keys.csv": "159dfcb58868b71e118ae945476aeb0aea42410aaead78ef8c4c8bdef026cbb2",
+    "episodes.csv": "c29c5e3223e87801432b00090a54c3a0b76e98838445e11a64639eac88dc1eb7"
+  },
+  "scenarios": [
+    "A",
+    "C"
+  ],
+  "schema": "neuroeco.p1-provenance/1",
+  "sequence_gate": {
+    "applied": true,
+    "blocks_fingerprinted": 11,
+    "d9_confirmed": [],
+    "decisions": [
+      {
+        "decision": 3,
+        "sha256": "c9add577e4f1961fdd233633c2bdeb51be6e9f53cefa6adf6717779699abedce"
+      }
+    ],
+    "notes": [
+      "computable B criteria missed: ['B3@C']; another stage-C iteration needs an identifiable parametric cause, moving on needs a documented decision of the author (P1-18). This is the author's judgement, not an automatic check."
+    ],
+    "reason": "S_C met with B criteria missed",
+    "step": "iteration 7",
+    "transitions": [
+      "iteration 1 (stage A) -> round 1: allowed",
+      "round 1 -> round 2: allowed",
+      "round 2 -> iteration 2 (stage B): allowed",
+      "iteration 2 (stage B) -> iteration 3 (stage B): allowed",
+      "iteration 3 (stage B) -> iteration 4 (stage B): allowed",
+      "iteration 4 (stage B) -> iteration 5 (stage C): allowed",
+      "iteration 5 (stage C) -> iteration 6 (stage C): allowed",
+      "iteration 6 (stage C) -> iteration 7 (stage C): allowed"
+    ],
+    "verdict": "allowed"
+  },
+  "stage": "C",
+  "state_k": {
+    "a1": true,
+    "b7_margin": 1.4000000000000021,
+    "checks": [
+      {
+        "constraint": "E1-prey",
+        "satisfied": true,
+        "scenario": "A",
+        "target": "E0 / c_basal / t_max in [0.4, 0.6]",
+        "value": 0.5
+      },
+      {
+        "constraint": "E2-prey",
+        "satisfied": true,
+        "scenario": "A",
+        "target": "c_move / c_basal >= 1",
+        "value": 2.0
+      },
+      {
+        "constraint": "E1-predator",
+        "satisfied": true,
+        "scenario": "A",
+        "target": "E0 / c_basal / t_max in [0.4, 0.6]",
+        "value": 0.5
+      },
+      {
+        "constraint": "E2-predator",
+        "satisfied": true,
+        "scenario": "A",
+        "target": "c_move / c_basal >= 1",
+        "value": 2.0
+      },
+      {
+        "constraint": "E5",
+        "satisfied": true,
+        "scenario": "A",
+        "target": "plant_energy / prey.e_max <= 0.5",
+        "value": 0.3
+      },
+      {
+        "constraint": "E1-prey",
+        "satisfied": true,
+        "scenario": "B",
+        "target": "E0 / c_basal / t_max in [0.4, 0.6]",
+        "value": 0.5
+      },
+      {
+        "constraint": "E2-prey",
+        "satisfied": true,
+        "scenario": "B",
+        "target": "c_move / c_basal >= 1",
+        "value": 2.0
+      },
+      {
+        "constraint": "E1-predator",
+        "satisfied": true,
+        "scenario": "B",
+        "target": "E0 / c_basal / t_max in [0.4, 0.6]",
+        "value": 0.5
+      },
+      {
+        "constraint": "E2-predator",
+        "satisfied": true,
+        "scenario": "B",
+        "target": "c_move / c_basal >= 1",
+        "value": 2.0
+      },
+      {
+        "constraint": "E5",
+        "satisfied": true,
+        "scenario": "B",
+        "target": "plant_energy / prey.e_max <= 0.5",
+        "value": 0.3
+      },
+      {
+        "constraint": "E1-prey",
+        "satisfied": true,
+        "scenario": "C",
+        "target": "E0 / c_basal / t_max in [0.4, 0.6]",
+        "value": 0.5
+      },
+      {
+        "constraint": "E2-prey",
+        "satisfied": true,
+        "scenario": "C",
+        "target": "c_move / c_basal >= 1",
+        "value": 2.0
+      },
+      {
+        "constraint": "E1-predator",
+        "satisfied": true,
+        "scenario": "C",
+        "target": "E0 / c_basal / t_max in [0.4, 0.6]",
+        "value": 0.5
+      },
+      {
+        "constraint": "E2-predator",
+        "satisfied": true,
+        "scenario": "C",
+        "target": "c_move / c_basal >= 1",
+        "value": 2.0
+      },
+      {
+        "constraint": "E5",
+        "satisfied": true,
+        "scenario": "C",
+        "target": "plant_energy / prey.e_max <= 0.5",
+        "value": 0.3
+      }
+    ]
+  },
+  "status": "completed",
+  "thread_env": {
+    "MKL_NUM_THREADS": "1",
+    "OMP_NUM_THREADS": "1",
+    "OPENBLAS_NUM_THREADS": "1"
+  },
+  "timestamp_utc": "2026-11-18T00:01:38+00:00",
+  "uv_lock_sha256": "a1696c0b67e691962127862195bcae1ce0f93a8db41e69a6814b88cc52717a14",
+  "values": {
+    "n_plants_a": 40,
+    "n_plants_b": 4,
+    "n_predators_c": 5,
+    "plant_energy": 30.0,
+    "predator_cruise_fraction": 0.7,
+    "prey_cruise_fraction": 0.3,
+    "prey_flee_threshold": 0.2,
+    "regrow_delay": 50
+  },
+  "values_iteration": 7,
+  "values_source": {
+    "path": "configs/pilots/p1/iterations/007.yaml",
+    "sha256": "1f8bcf371f3ddcb6832bf63031a282d5cff21d9d829b2de7be1ee1266228a7c6"
+  }
+}
