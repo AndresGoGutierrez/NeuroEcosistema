@@ -1,0 +1,26 @@
+# P1 author decision 003 (D-T4d-3, P1-18): stage C met S_C with B3 missed in C.
+schema: neuroeco.p1-decision/1
+decision: 3
+kind: b_criteria
+step:
+  kind: iteration
+  number: 7
+judges:
+  directory: calibration/iteration_006
+  provenance_sha256: 82b597896a71d5d57de73469ace2d46af7c6016f661238dadffd799b755f5095
+  criteria_sha256: 569ad5c350511b35359b3cbaa0ac17c1a22bf084b18527a4f6a181d73116a050
+choice: repeat_stage
+items:
+  - criterion: B3
+    part: ''
+    scenario: C
+    status: fail
+    decision: repeat_stage
+    justification: >-
+      43/180 depredadores alcanzan T_max/2; 83 quedan censurados antes del umbral porque los
+      episodios terminan pronto (mediana 457 pasos < 500) al agotarse las presas. Causa
+      paramétrica identificable: exceso de depredadores en C; se reduce n_pred,C en la iteración 7.
+justification: >-
+  La iteración 6 cumple S_C y B1 pasa por poco (0.203). B3 sigue fallando en C por la misma causa
+  paramétrica que en la iteración 5. P1-18 permite otra iteración C (iC = 2 < 5) cambiando solo
+  n_pred,C, que debe seguir siendo mayor que n_pred,A = 3.

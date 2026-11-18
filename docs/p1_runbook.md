@@ -24,7 +24,7 @@ comprobaciones están en [p1_data_dictionary.md](p1_data_dictionary.md); las dec
 | 1 | Proponer el paso: tipo (iteración, ronda, entrada, confirmación), parámetro, magnitud y motivo con referencia al resultado anterior | Claude propone; **el autor decide** | — |
 | 2 | Registrar la especificación (`configs/pilots/p1/iterations/NNN.yaml` o `rounds/RR.yaml`) y, si la puerta la exige, la decisión del autor (`configs/pilots/p1_decisions/NNN.yaml`) | Claude redacta; **el autor la aprueba** | — |
 | 3 | Commit y push del registro (P1-19: anterioridad pública) | Claude, con la autorización del autor | `git commit`, `git push` |
-| 4 | Esperar el CI del commit en verde | Automático | — |
+| 4 | Si el commit solo añade registros, decisiones o resultados (sin código ni pruebas), no se espera el CI: P1-19 exige anterioridad pública y la puerta exige HEAD = origin. Esos commits llevan `[skip ci]`. Un commit con código o pruebas sí espera su CI en verde | Automático | — |
 | 5 | Ejecutar el bloque | Claude | `uv run neuroeco pilot p1 --iteration configs/pilots/p1/iterations/NNN.yaml` (o `--round … --phase …`, `--entry-evaluation --values-from …`) |
 | 6 | Evaluar los criterios | Claude | `uv run neuroeco pilot p1-criteria --result results/pilots/p1/calibration/…` |
 | 7 | Verificar la secuencia | Claude | `uv run neuroeco pilot p1-sequence` |
@@ -32,7 +32,7 @@ comprobaciones están en [p1_data_dictionary.md](p1_data_dictionary.md); las dec
 | 9 | Commit y push de resultados, criterios y entrada del informe; esperar el CI | Claude, con el visto bueno del autor | `git commit`, `git push` |
 | 10 | Autorizar el paso siguiente | **El autor** | — |
 
-Dentro de un paso autorizado, los puntos 4 a 7 continúan sin intervención. Las rondas se
+Dentro de un paso autorizado, los puntos 4 a 7 continúan sin intervención (desde la iteración 7, a petición del autor, sin esperar el CI de los commits de solo datos). Las rondas se
 ejecutan en sus tres fases (`prey`, `predator` y, si cambió algún valor, `reevaluation`), cada
 una con sus pasos 5 a 9; las rejillas no tienen criterios (paso 6 solo para A_rev).
 
