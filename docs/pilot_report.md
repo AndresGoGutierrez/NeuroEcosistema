@@ -196,3 +196,28 @@ reparto y el arranque de cada tarea pesan; más allá de 16 workers la ganancia 
 esta máquina (32 procesadores lógicos). P3 mide la duración real de una ejecución completa con
 el número de workers elegido.
 
+
+## P2: tasa de mutación, generaciones y currículo (F6, ADR-035)
+
+Rejilla σ ∈ {0.02, 0.05, 0.10} × 4 arquitecturas × 2 ejecuciones, escenario A, G_piloto = 60,
+16 workers (`results/pilots/p2/`, grupos de semillas 40–51). Valores fijos: N = 40, E = 4,
+V = 16, k = 2, t = 3, k_val = 5. Decisión con `neuroeco pilot p2-decide`
+(`results/pilots/p2/p2_decision.json`).
+
+| Arquitectura | F_val final σ = 0.02 | σ = 0.05 | σ = 0.10 | Estancamiento (gen.) |
+|---|---|---|---|---|
+| prey_base | 0.182 | 0.237 | 0.290 | 50 |
+| prey_compact | 0.192 | 0.221 | 0.244 | 55 |
+| predator_base | 0.000 | 0.690 | 0.843 | 35 |
+| predator_compact | 0.001 | 0.436 | 0.774 | 55 |
+
+(F_val final = mediana de las dos ejecuciones en la generación 59.)
+
+- **σ = 0.10** en las cuatro arquitecturas: es el mayor F_val final en todas.
+- **G = 70**: el estancamiento más tardío (generación 55) × 1.25, redondeado a múltiplo de k_val.
+- **Currículo activo para el depredador**: el 98 % de las evaluaciones de las generaciones
+  0–9 tienen cero capturas (umbral 80 %), así que κ = 2 y G_c = ⌈70/2⌉ = 35.
+- **Objetivos de C2**: presa F₀ = 0.186, F_base = 0.290, Δ = 0.0104, θ = 0.279; depredador
+  F₀ = 0.000, F_base = 0.843, Δ = 0.0843, θ = 0.758.
+- Con σ = 0.10, una ejecución de 60 generaciones en A tardó 3–6 min con 16 workers; P3 mide
+  t_run con los valores finales en los tres escenarios.
