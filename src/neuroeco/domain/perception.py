@@ -17,7 +17,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from neuroeco.domain.geometry import minimal_displacement, pairwise_distances, relative_bearing
+from neuroeco.domain.geometry import minimal_displacement, relative_bearing
 from neuroeco.domain.params import WorldParams
 from neuroeco.domain.state import SpeciesState, WorldState
 
@@ -74,7 +74,10 @@ def encode_nearest(
     if n == 0 or target_positions.shape[0] == 0:
         return encoded
 
-    distances = pairwise_distances(observers.positions, target_positions, size)
+    # O1 (P0 optimization plan): the displacement is computed once and the distances come from
+    # it with the same expression as ``pairwise_distances``, so the result is bit-for-bit equal.
+    displacement = minimal_displacement(observers.positions, target_positions, size)
+    distances = np.hypot(displacement[..., 0], displacement[..., 1])
     perceivable = target_mask[np.newaxis, :] & (distances <= vision_radius)
     masked = np.where(perceivable, distances, np.inf)
     # Stable sort: equal distances keep index order, so ties go to the lower index.
@@ -82,7 +85,6 @@ def encode_nearest(
     nearest = np.take_along_axis(masked, order, axis=1)  # (n, k')
     found = np.isfinite(nearest) & observers.alive[:, np.newaxis]
 
-    displacement = minimal_displacement(observers.positions, target_positions, size)
     selected = np.take_along_axis(displacement, order[:, :, np.newaxis], axis=1)  # (n, k', 2)
     forward_unit, left_unit = relative_bearing(selected, observers.headings)
 
