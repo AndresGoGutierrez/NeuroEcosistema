@@ -54,18 +54,7 @@ def test_options_run_one_episode_in_the_terminal(monkeypatch) -> None:
     options = ["--scenario", "A", "--prey", "rules", "--predator", "untrained", "--mode", "run"]
     result = CliRunner().invoke(app, ["demo", *options])
     assert result.exit_code == 0, result.output
-    assert "captures            0" in result.output  # the untrained predator never captures
-
-
-def test_menu_runs_and_asks_for_another_episode(monkeypatch) -> None:
-    monkeypatch.chdir(ROOT)
-    # scenario A, prey rules, predator trained, terminal, 25 prey, 3 predators, no more
-    answers = "1\n1\n2\n2\n\n\nn\n"
-    result = CliRunner().invoke(app, ["demo"], input=answers)
-    assert result.exit_code == 0, result.output
-    assert "=== NeuroEcosistema: demo ===" in result.output
-    assert "f8_predator_base_A_r0/selected.npz" in result.output
-    assert "captured fraction" in result.output
+    assert "Capturas: 0 " in result.output  # the untrained predator never captures
 
 
 def test_invalid_option_exits_with_an_error(monkeypatch) -> None:
@@ -88,3 +77,41 @@ def test_view_mode_calls_the_viewer_with_the_resolved_options(monkeypatch) -> No
     assert args[0] == "C" and args[1].endswith("f8_prey_base_C_r0/selected.npz")
     assert args[2] == "rules" and args[4] == ["world.n_prey=40"]
     assert kwargs["paused"] is True and kwargs["exit_at_end"] is False
+
+
+def test_menu_state_enforces_the_demo_rules() -> None:
+    from neuroeco.presentation.launcher import MenuState
+
+    state = MenuState(prey="compact")
+    assert "compact" in state.brains()
+    state.set_scenario("C")
+    assert state.prey == "trained" and "compact" not in state.brains()
+    assert (state.n_prey, state.n_predators) == (25, 5) and state.overrides() == []
+    for _ in range(20):
+        state.change("n_predators", +1)
+        state.change("run", +1)
+    assert state.n_predators == 10 and state.run == 9
+    assert state.overrides() == ["world.n_predators=10"]
+
+
+def test_menu_window_clicks_choose_and_start(monkeypatch) -> None:
+    import pygame
+
+    import viewer_support  # noqa: F401  (headless SDL)
+    from neuroeco.presentation.launcher import Launcher, MenuState
+
+    monkeypatch.chdir(ROOT)
+    state = MenuState()
+    launcher = Launcher(state, lambda menu: ["ok"], fps=0)
+    clicks = iter(
+        ["B  Escasez de comida", "Azar", "Resultados rápidos", "Ver en el visor  (Enter)"]
+    )
+
+    def events():
+        label = next(clicks)
+        button = next(b for b in launcher.buttons if b.label == label)
+        return [pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1, pos=button.rect.center)]
+
+    launcher._events = events
+    assert launcher.open() == "view"
+    assert state.scenario == "B" and state.prey == "random" and state.message == ["ok"]

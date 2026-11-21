@@ -62,25 +62,39 @@ def count_overrides(n_prey: int | None, n_predators: int | None) -> list[str]:
     return overrides
 
 
-def _ask_int(label: str, default: int, low: int, high: int) -> int:
-    while True:
-        value = typer.prompt(label, default=default, type=int)
-        if low <= value <= high:
-            return value
-        typer.echo(f"  elige un número entre {low} y {high}")
+def quick_results(
+    scenario: str, prey_policy: str, predator_policy: str, overrides: list[str], episode: int = 0
+) -> list[str]:
+    """Metrics of one episode (same seeds as the viewer), as lines for the menu."""
+    from neuroeco.application.evaluation import EpisodeIdentity, run_episode
+    from neuroeco.application.seeding import Purpose
+    from neuroeco.bootstrap import (
+        DEFAULT_CONFIG_DIR,
+        EXPLORATORY_SEED_GROUP,
+        build_policy,
+        build_runtime,
+    )
 
-
-def _choose(title: str, options: dict[str, str], default: str) -> str:
-    keys = list(options)
-    typer.echo(f"\n{title}")
-    for number, key in enumerate(keys, start=1):
-        typer.echo(f"  [{number}] {options[key]}")
-    return keys[_ask_int("  >", keys.index(default) + 1, 1, len(keys)) - 1]
-
-
-def _optional_count(label: str, limits: tuple[int, int], default: int) -> int | None:
-    value = _ask_int(f"  {label} ({limits[0]}-{limits[1]})", default, *limits)
-    return None if value == default else value
+    runtime = build_runtime(scenario, overrides, DEFAULT_CONFIG_DIR)
+    world = runtime.config.world
+    result = run_episode(
+        world,
+        build_policy(prey_policy, "prey", runtime.config),
+        build_policy(predator_policy, "predator", runtime.config),
+        runtime.registry,
+        EpisodeIdentity(Purpose.PILOT, EXPLORATORY_SEED_GROUP, item=episode),
+    )
+    m = result.metrics
+    alive = round(m.prey_alive_fraction_end.value * world.n_prey)
+    return [
+        f"Partida {episode}: {m.steps} de {world.t_max} pasos (mismas semillas que el visor)",
+        f"Supervivencia media de las presas: {m.prey_survival.value:.3f}",
+        f"Presas vivas al final: {alive} de {world.n_prey}",
+        f"Capturas: {m.captures} (fracción capturada {m.captured_fraction.value:.3f})",
+        f"Presas muertas de hambre: {100 * m.starvation_incidence_end:.0f} %",
+        f"Plantas comidas: {m.plants_eaten}",
+        f"Depredadores vivos al final: {m.predators_alive_end} de {world.n_predators}",
+    ]
 
 
 def demo_command(
@@ -93,66 +107,66 @@ def demo_command(
     n_prey: Annotated[int | None, typer.Option(help="Number of prey (5-50).")] = None,
     n_predators: Annotated[int | None, typer.Option(help="Number of predators (1-10).")] = None,
 ) -> None:
-    """Presentation menu: pick the scenario and the brain of each species, then watch it."""
+    """Presentation menu (a window): pick the scenario and the brains, then watch the episode.
+
+    With --scenario, --prey and --predator it skips the menu and runs that choice directly.
+    """
+    if scenario is None or prey is None or predator is None:
+        _menu_loop(episode)
+        return
+    try:
+        if scenario not in SCENARIOS:
+            raise ValueError(f"scenario must be A, B or C, got {scenario!r}")
+        if mode not in ("view", "run"):
+            raise ValueError(f"mode must be view or run, got {mode!r}")
+        prey_policy = policy_for(prey, "prey", scenario, run)
+        predator_policy = policy_for(predator, "predator", scenario, run)
+        overrides = count_overrides(n_prey, n_predators)
+    except ValueError as error:
+        typer.echo(f"error: {error}", err=True)
+        raise typer.Exit(code=1) from error
+    if mode == "run":
+        lines = quick_results(scenario, prey_policy, predator_policy, overrides, episode)
+        typer.echo("\n".join(lines))
+    else:
+        _view(scenario, prey_policy, predator_policy, overrides, episode)
+
+
+def _view(
+    scenario: str, prey_policy: str, predator_policy: str, overrides: list[str], episode: int
+) -> None:
     # Imported here: cli imports this module to register the command.
     from neuroeco.bootstrap import DEFAULT_CONFIG_DIR
-    from neuroeco.presentation.cli import run as run_command
-    from neuroeco.presentation.cli import view as view_command
+    from neuroeco.presentation import cli
 
-    interactive = scenario is None or prey is None or predator is None
-    if interactive:
-        typer.echo("=== NeuroEcosistema: demo ===")
-    while True:
-        if interactive:
-            scenario = _choose("1) Escenario:", SCENARIOS, scenario or "A")
-            brains = (
-                BRAINS if scenario == "A" else {k: v for k, v in BRAINS.items() if k != "compact"}
-            )
-            prey = _choose("2) Cerebro de las PRESAS:", brains, "rules")
-            predator = _choose("3) Cerebro de los DEPREDADORES:", brains, "trained")
-            mode = _choose(
-                "4) ¿Cómo quieres verlo?",
-                {"view": "Visor (ventana)", "run": "Solo resultados en la terminal"},
-                "view",
-            )
-            typer.echo("\n5) Cantidad de agentes (Enter = valores del escenario):")
-            n_prey = _optional_count("Presas", PREY_LIMITS, 25)
-            n_predators = _optional_count(
-                "Depredadores", PREDATOR_LIMITS, 5 if scenario == "C" else 3
-            )
+    cli.view(
+        scenario,
+        prey_policy,
+        predator_policy,
+        episode,
+        overrides,
+        DEFAULT_CONFIG_DIR,
+        Path("runs/view"),
+        paused=True,
+        speed=1,
+        fps=30,
+        exit_at_end=False,
+    )
+
+
+def _menu_loop(episode: int) -> None:
+    from neuroeco.presentation.launcher import Launcher, MenuState
+
+    state = MenuState()
+
+    def quick(menu: MenuState) -> list[str]:
+        prey_policy, predator_policy = menu.policies()
+        return quick_results(menu.scenario, prey_policy, predator_policy, menu.overrides(), episode)
+
+    while Launcher(state, quick).open() == "view":
+        prey_policy, predator_policy = state.policies()
         try:
-            if scenario not in SCENARIOS:
-                raise ValueError(f"scenario must be A, B or C, got {scenario!r}")
-            if mode not in ("view", "run"):
-                raise ValueError(f"mode must be view or run, got {mode!r}")
-            prey_policy = policy_for(prey, "prey", scenario, run)
-            predator_policy = policy_for(predator, "predator", scenario, run)
-            overrides = count_overrides(n_prey, n_predators)
-        except ValueError as error:
-            typer.echo(f"error: {error}", err=True)
-            raise typer.Exit(code=1) from error
-
-        typer.echo(
-            f"\nescenario {scenario} ({SCENARIOS[scenario]}): presas = {BRAINS[prey]}, "
-            f"depredadores = {BRAINS[predator]}"
-        )
-        if mode == "run":
-            run_command(
-                scenario, prey_policy, predator_policy, episode, overrides, DEFAULT_CONFIG_DIR
-            )
-        else:
-            view_command(
-                scenario,
-                prey_policy,
-                predator_policy,
-                episode,
-                overrides,
-                DEFAULT_CONFIG_DIR,
-                Path("runs/view"),
-                paused=True,
-                speed=1,
-                fps=30,
-                exit_at_end=False,
-            )
-        if not interactive or not typer.confirm("\n¿Ver otra partida?", default=True):
-            return
+            _view(state.scenario, prey_policy, predator_policy, state.overrides(), episode)
+            state.message = []
+        except typer.Exit:
+            state.message = ["error: el visor no pudo abrir esta partida (ver la terminal)"]
