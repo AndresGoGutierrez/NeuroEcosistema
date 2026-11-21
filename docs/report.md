@@ -1,7 +1,7 @@
 # NeuroEcosistema: neuroevolución de presas y depredadores en un ecosistema 2D
 
 Informe final — Electiva I de Profundización: Inteligencia Artificial, Universidad Santo Tomás,
-seccional Tunja. Autor: AndresGoGutierrez. Noviembre de 2026.
+seccional Tunja. Autores: Andrés Gómez Gutiérrez y Nicolás Otero Vargas. Noviembre de 2026.
 
 ## 1. Problema y objetivo
 
@@ -192,5 +192,5 @@ partir de un criterio sustantivo y no solo del 10 % de la ganancia.
 ## 10. Uso de IA generativa
 
 Se usó Claude Code (Anthropic) para diseño, implementación, pruebas, análisis y redacción, con
-revisión y decisiones del autor. Las propuestas corregidas o rechazadas y las validaciones se
+revisión y decisiones de los autores. Las propuestas corregidas o rechazadas y las validaciones se
 registran en `docs/ai_usage_statement.md`.

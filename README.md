@@ -7,6 +7,7 @@ evidencia reproducible qué decisiones de modelado y entrenamiento funcionan, cu
 
 Proyecto final integrador — Electiva I de Profundización: Inteligencia Artificial,
 Facultad de Ingeniería de Sistemas, Universidad Santo Tomás, seccional Tunja.
+Autores: Andrés Gómez Gutiérrez y Nicolás Otero Vargas.
 Los requisitos provienen de la propuesta académica del curso, que es el documento de referencia
 del proyecto y no se incluye en este repositorio. Las secciones de la propuesta se citan como
 §1–§11 en la documentación.

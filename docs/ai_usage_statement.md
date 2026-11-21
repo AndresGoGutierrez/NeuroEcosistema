@@ -4,6 +4,9 @@ La propuesta académica (§8) exige declarar qué herramientas de IA generativa 
 qué, qué recomendaciones se aceptaron o rechazaron y qué validaciones se hicieron. Este archivo
 se mantiene como registro durante todo el proyecto; la versión resumida irá en el informe (F9).
 
+Autores del proyecto: Andrés Gómez Gutiérrez y Nicolás Otero Vargas. En este registro, «el autor» designa a los autores del
+proyecto; las ejecuciones y commits se hicieron desde la cuenta `AndresGoGutierrez`.
+
 ## Herramientas
 
 | Herramienta | Uso |
