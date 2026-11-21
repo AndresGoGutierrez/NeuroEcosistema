@@ -3,6 +3,16 @@
 Duración aproximada: 8–10 minutos. Todos los comandos desde la raíz del repositorio, después de
 `uv sync --frozen`. `R=results/experiments/f8/runs`.
 
+**Forma más simple:** `uv run neuroeco demo` abre un menú que pregunta el escenario, el cerebro
+de cada especie (reglas, red entrenada, red sin entrenar, azar o red compacta en A), si se ve en
+el visor o en la terminal y, opcionalmente, el número de presas (5–50) y depredadores (1–10).
+Sin menú: `uv run neuroeco demo --scenario A --prey rules --predator trained` (`--mode run`
+para la terminal, `--run 0-9` para elegir la ejecución formal). Los pasos siguientes muestran
+los comandos equivalentes.
+
+En el visor, al hacer clic en un agente se dibuja su radio de visión y el panel muestra sus
+entradas, su salida y las activaciones de las capas ocultas.
+
 ## 1. El ecosistema con reglas (1 min)
 
 ```bash

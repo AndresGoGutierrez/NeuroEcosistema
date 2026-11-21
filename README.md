@@ -58,6 +58,7 @@ uv run pytest                # pruebas
 ## Uso
 
 ```bash
+uv run neuroeco demo                                             # menú de la demo (escenario y cerebros)
 uv run neuroeco run --scenario A                                 # un episodio con reglas
 uv run neuroeco view --scenario A --prey model:<archivo.npz>     # visor con una red entrenada
 uv run neuroeco experiment train --stop-at AAAA-MM-DDTHH:MM      # campaña formal (reanudable)

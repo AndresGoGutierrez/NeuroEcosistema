@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
+from pathlib import Path
 
 import numpy as np
 
@@ -82,6 +83,17 @@ class SessionInfo:
     config_hash: str
 
 
+def short_policy(policy: str) -> str:
+    """``model:<long path>/<run>/<file>.npz`` -> ``model:<run>/<file>`` for the HUD."""
+    if not policy.startswith("model:"):
+        return policy
+    path = Path(policy.removeprefix("model:"))
+    parent = path.parent.name
+    if parent == "checkpoints":
+        parent = f"{path.parent.parent.name}/checkpoints"
+    return f"model:{parent}/{path.stem}" if parent else policy
+
+
 def hud_lines(
     stats: HudStats, info: SessionInfo, paused: bool, steps_per_frame: int, finished: bool
 ) -> list[str]:
@@ -95,7 +107,8 @@ def hud_lines(
     return [
         f"step {stats.step} / {stats.t_max}   {status}",
         f"scenario {info.scenario}   episode {info.episode}",
-        f"prey: {info.prey_policy}   predator: {info.predator_policy}",
+        f"prey: {short_policy(info.prey_policy)}",
+        f"predator: {short_policy(info.predator_policy)}",
         f"config {info.config_hash[:12]}",
         "",
         f"prey       alive {stats.prey_alive}/{stats.n_prey}",
