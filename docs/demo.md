@@ -6,7 +6,9 @@ Duración aproximada: 8–10 minutos. Todos los comandos desde la raíz del repo
 **Forma más simple:** `uv run neuroeco demo` abre una ventana de menú con botones: escenario
 (A, B, C), cerebro de cada especie (reglas, red entrenada, sin entrenar, azar o red compacta en
 A), número de presas (5–50) y depredadores (1–10) y la ejecución formal cuyas redes se usan
-(r0–r9). «Ver en el visor» abre la partida; al cerrarla con Esc se vuelve al menú.
+(r0–r9), y la partida (#0–#99): la semilla de las posiciones iniciales y del azar, del grupo
+exploratorio (nunca una semilla TEST); la misma partida siempre se repite igual. «Ver en el
+visor» abre la partida; al cerrarla con Esc se vuelve al menú.
 «Resultados rápidos» simula la misma partida sin ventana y muestra sus métricas en el panel.
 Sin menú: `uv run neuroeco demo --scenario A --prey rules --predator trained` (`--mode run`
 para la terminal). Los pasos siguientes muestran los comandos equivalentes.

@@ -18,6 +18,7 @@ import pygame
 
 from neuroeco.presentation.demo import (
     BRAINS,
+    EPISODE_LIMITS,
     PREDATOR_LIMITS,
     PREY_LIMITS,
     RUN_LIMITS,
@@ -62,6 +63,13 @@ BRAIN_HELP = {
     "random": "acciones al azar en cada paso",
     "compact": "red con un tercio de los parámetros (experimento C2, solo en A)",
 }
+STEPPERS = (
+    ("n_prey", "presas", PREY),
+    ("n_predators", "depredadores", PREDATOR),
+    ("run", "entrenamiento", ACCENT),
+    ("episode", "partida", ACCENT),
+)
+STEPPER_SPACING = 150
 DISABLED = (70, 76, 86)
 BUTTON = (44, 51, 62)
 BUTTON_HOVER = (58, 66, 80)
@@ -77,6 +85,7 @@ class MenuState:
     n_prey: int = 25
     n_predators: int = 3
     run: int = 0
+    episode: int = 0
     message: list[str] = field(default_factory=list)
 
     @staticmethod
@@ -94,7 +103,12 @@ class MenuState:
             self.predator = "trained" if self.predator == "compact" else self.predator
 
     def change(self, name: str, delta: int) -> None:
-        limits = {"n_prey": PREY_LIMITS, "n_predators": PREDATOR_LIMITS, "run": RUN_LIMITS}[name]
+        limits = {
+            "n_prey": PREY_LIMITS,
+            "n_predators": PREDATOR_LIMITS,
+            "run": RUN_LIMITS,
+            "episode": EPISODE_LIMITS,
+        }[name]
         setattr(self, name, min(max(getattr(self, name) + delta, limits[0]), limits[1]))
 
     def overrides(self) -> list[str]:
@@ -228,12 +242,10 @@ class Launcher:
                     enabled,
                     color,
                 )
-        for i, (name, color) in enumerate((("n_prey", PREY), ("n_predators", PREDATOR))):
-            x = left + i * 210
-            add(x, 388, 40, "-", lambda name=name: s.change(name, -1), color=color)
-            add(x + 120, 388, 40, "+", lambda name=name: s.change(name, +1), color=color)
-        add(left + 420, 388, 40, "-", lambda: s.change("run", -1))
-        add(left + 500, 388, 40, "+", lambda: s.change("run", +1))
+        for i, (name, _label, color) in enumerate(STEPPERS):
+            x = left + i * STEPPER_SPACING
+            add(x, 388, 36, "-", lambda name=name: s.change(name, -1), color=color)
+            add(x + 96, 388, 36, "+", lambda name=name: s.change(name, +1), color=color)
         add(
             left,
             452,
@@ -263,13 +275,17 @@ class Launcher:
         self._blit("1. Escenario", (left, 88), TEXT, self._section)
         self._blit("2. Cerebro de las presas", (left, 182), PREY, self._section)
         self._blit("3. Cerebro de los depredadores", (left, 268), PREDATOR, self._section)
-        self._blit("4. Población y entrenamiento", (left, 362), TEXT, self._section)
-        self._blit(f"{s.n_prey:>3}", (left + 62, 396), PREY)
-        self._blit("presas", (left + 50, 424), DIM_TEXT, self._small)
-        self._blit(f"{s.n_predators:>3}", (left + 272, 396), PREDATOR)
-        self._blit("depredadores", (left + 240, 424), DIM_TEXT, self._small)
-        self._blit(f"r{s.run}", (left + 470, 396), ACCENT)
-        self._blit("entrenamiento", (left + 432, 424), DIM_TEXT, self._small)
+        self._blit("4. Población, entrenamiento y partida", (left, 362), TEXT, self._section)
+        values = {
+            "n_prey": str(s.n_prey),
+            "n_predators": str(s.n_predators),
+            "run": f"r{s.run}",
+            "episode": f"#{s.episode}",
+        }
+        for i, (name, label, color) in enumerate(STEPPERS):
+            center = left + i * STEPPER_SPACING + 66
+            self._blit_centered(values[name], center, 396, color, self._font)
+            self._blit_centered(label, center, 424, DIM_TEXT, self._small)
         self._blit("5. Ejecutar", (left, 516), TEXT, self._section)
 
         mouse = pygame.mouse.get_pos()
@@ -300,6 +316,11 @@ class Launcher:
             (BRAIN_HELP[s.predator], DIM_TEXT),
             ("", TEXT),
             (f"Redes de la ejecución formal r{s.run} (de 0 a 9)", DIM_TEXT),
+            (
+                f"Partida #{s.episode}: semilla de la partida (posiciones iniciales y azar); "
+                "la misma partida siempre se repite igual",
+                DIM_TEXT,
+            ),
         ]
         top = 56
         for text, color in lines:
@@ -336,6 +357,10 @@ class Launcher:
         font = self._small if self._font.size(text)[0] > rect.width - 10 else self._font
         image = font.render(text, True, color)
         self._screen.blit(image, image.get_rect(center=rect.center))
+
+    def _blit_centered(self, text, center_x, y, color, font) -> None:
+        image = font.render(text, True, color)
+        self._screen.blit(image, image.get_rect(midtop=(center_x, y)))
 
     def _blit(self, text, position, color, font=None) -> None:
         self._screen.blit((font or self._font).render(text, True, color), position)

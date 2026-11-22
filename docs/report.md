@@ -1,4 +1,4 @@
-# NeuroEcosistema: neuroevolución de presas y depredadores en un ecosistema 2D
+﻿# NeuroEcosistema: neuroevolución de presas y depredadores en un ecosistema 2D
 
 Informe final — Electiva I de Profundización: Inteligencia Artificial, Universidad Santo Tomás,
 seccional Tunja. Autores: Andrés Gómez Gutiérrez y Nicolás Otero Vargas. Noviembre de 2026.
@@ -183,7 +183,7 @@ partir de un criterio sustantivo y no solo del 10 % de la ganancia.
 
 - Clean Architecture con contratos verificados (`lint-imports`, pruebas de arquitectura); el
   dominio solo usa la biblioteca estándar y NumPy.
-- 1074 pruebas automáticas e integración continua en cada cambio de código.
+- 1076 pruebas automáticas e integración continua en cada cambio de código.
 - Toda la aleatoriedad deriva de `project_seed` con claves de seis enteros (ADR-028);
   determinismo verificado con 0, 1 y 4 procesos (DET-3).
 - Resultados en CSV y JSON con procedencia (commit, configuración, versiones) en cada

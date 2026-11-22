@@ -92,6 +92,34 @@ def test_menu_state_enforces_the_demo_rules() -> None:
         state.change("run", +1)
     assert state.n_predators == 10 and state.run == 9
     assert state.overrides() == ["world.n_predators=10"]
+    state.change("episode", -1)
+    assert state.episode == 0
+    for _ in range(150):
+        state.change("episode", +1)
+    assert state.episode == 99
+
+
+def test_menu_episode_reaches_the_viewer_and_the_quick_results(monkeypatch) -> None:
+    from neuroeco.presentation import demo, launcher
+
+    opened = iter(["view", "quit"])
+    quick_lines: list[list[str]] = []
+
+    def fake_open(self) -> str:
+        self.state.episode = 7
+        quick_lines.append(self.quick_run(self.state))
+        return next(opened)
+
+    viewed: list[int] = []
+    monkeypatch.chdir(ROOT)
+    monkeypatch.setattr(launcher.Launcher, "open", fake_open)
+    monkeypatch.setattr(demo, "_view", lambda *args: viewed.append(args[4]))
+    monkeypatch.setattr(
+        demo, "quick_results", lambda scenario, prey, predator, overrides, episode: [episode]
+    )
+    demo._menu_loop(episode=3)
+    assert viewed == [7]
+    assert quick_lines == [[7], [7]]
 
 
 def test_menu_window_clicks_choose_and_start(monkeypatch) -> None:
@@ -115,3 +143,30 @@ def test_menu_window_clicks_choose_and_start(monkeypatch) -> None:
     launcher._events = events
     assert launcher.open() == "view"
     assert state.scenario == "B" and state.prey == "random" and state.message == ["ok"]
+
+
+def test_menu_window_episode_buttons_fit_and_change_the_seed() -> None:
+    import pygame
+
+    import viewer_support  # noqa: F401  (headless SDL)
+    from neuroeco.presentation.launcher import Launcher, MenuState
+    from neuroeco.presentation.viewer import CANVAS_PIXELS
+
+    state = MenuState()
+    launcher = Launcher(state, lambda menu: ["ok"], fps=0)
+    presses = iter([("+", 3), ("+", 3), ("-", 3), (None, None)])
+
+    def events():
+        label, group = next(presses)
+        if label is None:
+            return [pygame.event.Event(pygame.QUIT)]
+        steppers = [b for b in launcher.buttons if b.label == label]
+        button = steppers[group]
+        return [pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1, pos=button.rect.center)]
+
+    launcher._events = events
+    assert launcher.open() == "quit"
+    assert state.episode == 1 and state.run == 0
+    rects = [b.rect for b in launcher.buttons]
+    assert all(r.right <= CANVAS_PIXELS for r in rects)
+    assert not any(a.colliderect(b) for i, a in enumerate(rects) for b in rects[i + 1 :])

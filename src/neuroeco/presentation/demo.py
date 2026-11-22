@@ -25,6 +25,7 @@ SCENARIOS = {"A": "Abundancia", "B": "Escasez de comida", "C": "Presión de depr
 PREY_LIMITS = (5, 50)
 PREDATOR_LIMITS = (1, 10)
 RUN_LIMITS = (0, 9)
+EPISODE_LIMITS = (0, 99)  # seed item of the exploratory group: never a TEST seed
 
 
 def policy_for(brain: str, species: str, scenario: str, run: int, runs: Path = RUNS) -> str:
@@ -157,16 +158,18 @@ def _view(
 def _menu_loop(episode: int) -> None:
     from neuroeco.presentation.launcher import Launcher, MenuState
 
-    state = MenuState()
+    state = MenuState(episode=min(max(episode, EPISODE_LIMITS[0]), EPISODE_LIMITS[1]))
 
     def quick(menu: MenuState) -> list[str]:
         prey_policy, predator_policy = menu.policies()
-        return quick_results(menu.scenario, prey_policy, predator_policy, menu.overrides(), episode)
+        return quick_results(
+            menu.scenario, prey_policy, predator_policy, menu.overrides(), menu.episode
+        )
 
     while Launcher(state, quick).open() == "view":
         prey_policy, predator_policy = state.policies()
         try:
-            _view(state.scenario, prey_policy, predator_policy, state.overrides(), episode)
+            _view(state.scenario, prey_policy, predator_policy, state.overrides(), state.episode)
             state.message = []
         except typer.Exit:
             state.message = ["error: el visor no pudo abrir esta partida (ver la terminal)"]
