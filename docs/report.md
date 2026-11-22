@@ -183,7 +183,7 @@ partir de un criterio sustantivo y no solo del 10 % de la ganancia.
 
 - Clean Architecture con contratos verificados (`lint-imports`, pruebas de arquitectura); el
   dominio solo usa la biblioteca estándar y NumPy.
-- 1063 pruebas automáticas e integración continua en cada cambio de código.
+- 1074 pruebas automáticas e integración continua en cada cambio de código.
 - Toda la aleatoriedad deriva de `project_seed` con claves de seis enteros (ADR-028);
   determinismo verificado con 0, 1 y 4 procesos (DET-3).
 - Resultados en CSV y JSON con procedencia (commit, configuración, versiones) en cada
