@@ -1,4 +1,4 @@
-﻿# NeuroEcosistema: neuroevolución de presas y depredadores en un ecosistema 2D
+# NeuroEcosistema: neuroevolución de presas y depredadores en un ecosistema 2D
 
 Informe final — Electiva I de Profundización: Inteligencia Artificial, Universidad Santo Tomás,
 seccional Tunja. Autores: Andrés Gómez Gutiérrez y Nicolás Otero Vargas. Noviembre de 2026.
