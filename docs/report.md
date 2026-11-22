@@ -144,9 +144,10 @@ Figuras: `results/experiments/f8/analysis/` (`c1_differences.png`, `c3_differenc
    con 434 parámetros y 70 generaciones; la presa no. Para el depredador basta una regla de
    persecución que la red reproduce; la presa debe equilibrar alimentarse y huir con
    información parcial (dos depredadores y una planta, sin ver a otras presas).
-3. **La presa todavía estaba aprendiendo.** La curva de validación de la presa compacta sigue
-   subiendo en la generación 70 y la de la presa base en C apenas se aplana, y 7 de las 10 ejecuciones de la presa compacta
-   seleccionan el modelo en las dos últimas validaciones (generaciones 65 y 69). El estancamiento de P2 se estimó con 60 generaciones y 2
+3. **La presa todavía estaba aprendiendo.** Las curvas de validación de la presa no se
+   aplanan como las del depredador: suben hasta las últimas generaciones, y 8 de las 10
+   ejecuciones de la presa compacta (8 de 10 también en la presa base en C) seleccionan el
+   modelo en las dos últimas validaciones (generaciones 65 y 69). El estancamiento de P2 se estimó con 60 generaciones y 2
    ejecuciones, lo que subestimó el presupuesto necesario. C3 negativo para la presa refleja
    entrenamiento insuficiente, no un límite demostrado de la red.
 4. **Especialización frente al oponente de entrenamiento.** La presa entrenada supera a las
