@@ -28,3 +28,5 @@ Propuesta_Proyecto_Final_*.docx
 Thumbs.db
 .vscode/
 .idea/
+*.docx
+~$*
