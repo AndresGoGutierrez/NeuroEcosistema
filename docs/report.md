@@ -162,8 +162,9 @@ Figuras: `results/experiments/f8/analysis/` (`c1_differences.png`, `c3_differenc
 ## 7. Mejora propuesta (ADR-037)
 
 La primera decisión que se modificaría es el **presupuesto de entrenamiento de la presa**
-(G y oponentes de entrenamiento), con esta evidencia: curvas de validación crecientes en la
-generación 70, selección del modelo en las últimas validaciones (presa compacta) y desventaja frente a las
+(G y oponentes de entrenamiento), con esta evidencia: curvas de validación que no se aplanan
+antes de la generación 70, selección del modelo en las dos últimas validaciones (8 de 10
+ejecuciones de la presa compacta y de la presa base en C) y desventaja frente a las
 reglas concentrada en los oponentes deterministas. Se propone G ≥ 150 para la presa con la
 regla de estancamiento medida sobre R ejecuciones (no 2), y entrenar frente a una mezcla
 M0/M1/M2 para reducir la especialización. Después, para C2 de la presa, aumentar R o fijar Δ a
